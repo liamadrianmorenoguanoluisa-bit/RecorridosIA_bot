@@ -40,20 +40,23 @@ GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.
 
 
 import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.request
 
+class PingHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"RecorridosIA OK")
+    def log_message(self, format, *args):
+        pass  # silenciar logs del servidor
+
 def keep_alive():
-    """Hace ping cada 10 minutos para que Render no se duerma."""
-    import time
-    url = os.getenv("RENDER_EXTERNAL_URL", "")
-    while True:
-        try:
-            if url:
-                urllib.request.urlopen(url)
-                logger.info("✅ Ping enviado — bot despierto")
-        except Exception:
-            pass
-        time.sleep(600)  # cada 10 minutos
+    """Servidor web para que Render no mate el proceso."""
+    port = int(os.getenv("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), PingHandler)
+    logger.info(f"🌐 Servidor web en puerto {port}")
+    server.serve_forever()
 
 USUARIOS_AUTENTICADOS = set()
 
@@ -579,6 +582,3 @@ async def cancelar(update, ctx):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-    conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start), CommandHandler("inspeccionar", inspeccionar), MessageHandler(filters.Regex("🔍 Inspeccionar"), inspeccionar)],
