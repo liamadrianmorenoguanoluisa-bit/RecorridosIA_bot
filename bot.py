@@ -296,12 +296,51 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     return ESPERANDO_TOTP
 
 
+DOMINIO_PERMITIDO = os.getenv("DOMINIO_EMAIL", "telconet.ec")
+
 async def verificar_totp(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if verificar_codigo_totp(update.message.text.strip()):
+    texto = update.message.text.strip().lower()
+    email = ""
+    codigo = ""
+    for linea in texto.splitlines():
+        if linea.startswith("email:"):
+            email = linea.replace("email:", "").strip()
+        elif linea.startswith("totp:"):
+            codigo = linea.replace("totp:", "").strip()
+    if not email or not codigo:
+        await update.message.reply_text(
+            "❌ Formato incorrecto. Usa exactamente:
+
+"
+            "email: tucorreo@telconet.ec
+"
+            "totp: 123456"
+        )
+        return ESPERANDO_TOTP
+    if not email.endswith(DOMINIO_PERMITIDO):
+        await update.message.reply_text(
+            f"❌ Solo se permiten correos @{DOMINIO_PERMITIDO}
+
+"
+            "email: tucorreo@telconet.ec
+"
+            "totp: 123456"
+        )
+        return ESPERANDO_TOTP
+    if verificar_codigo_totp(codigo):
         USUARIOS_AUTENTICADOS.add(update.effective_user.id)
-        await update.message.reply_text("✅ *Acceso autorizado*", parse_mode="Markdown")
+        nombre = email.split("@")[0].upper()
+        await update.message.reply_text(f"✅ *Acceso autorizado*
+Bienvenido {nombre}", parse_mode="Markdown")
         return await menu_principal(update, ctx)
-    await update.message.reply_text("❌ Código incorrecto. Intenta de nuevo:")
+    await update.message.reply_text(
+        "❌ Código incorrecto o expirado.
+
+"
+        "email: tucorreo@telconet.ec
+"
+        "totp: 123456"
+    )
     return ESPERANDO_TOTP
 
 
@@ -543,42 +582,3 @@ def main():
     app = Application.builder().token(BOT_TOKEN).build()
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start), CommandHandler("inspeccionar", inspeccionar), MessageHandler(filters.Regex("🔍 Inspeccionar"), inspeccionar)],
-        states={
-            ESPERANDO_TOTP:   [MessageHandler(filters.TEXT & ~filters.COMMAND, verificar_totp)],
-            MENU_PRINCIPAL:   [MessageHandler(filters.Regex("🔍 Inspeccionar"), inspeccionar), MessageHandler(filters.TEXT & ~filters.COMMAND, menu_principal)],
-            NOMBRE_RUTA:      [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_nombre_ruta)],
-            CODIGO_CUADRILLA: [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_cuadrilla)],
-            NODO_INICIAL:     [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_nodo_inicial)],
-            NODO_FINAL:       [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_nodo_final)],
-            LIDER:            [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_lider)],
-            AYUDANTE:         [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_ayudante)],
-            COORDINADOR:      [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_coordinador)],
-            PLACA:            [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_placa)],
-            DISTANCIA:        [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_distancia)],
-            NOVEDADES_AUTO:   [MessageHandler(filters.PHOTO, recv_media), MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_novedades)],
-            TAREA_PENDIENTE:  [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_tarea)],
-            FOTO_ANTES:       [MessageHandler(filters.PHOTO, recv_foto_antes), MessageHandler(filters.TEXT & ~filters.COMMAND, recv_foto_antes)],
-            FOTO_DESPUES:     [MessageHandler(filters.PHOTO, recv_foto_despues), MessageHandler(filters.TEXT & ~filters.COMMAND, recv_foto_despues)],
-            OBSERVACIONES:    [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_observaciones)],
-            PREGUNTA_MANGAS:  [MessageHandler(filters.TEXT & ~filters.COMMAND, pregunta_mangas)],
-            MANGA_NOMBRE:     [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_manga_nombre)],
-            MANGA_COORDS:     [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_manga_coords)],
-            MANGA_OBS:        [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_manga_obs)],
-            PREGUNTA_HILOS:   [MessageHandler(filters.TEXT & ~filters.COMMAND, pregunta_hilos)],
-            HILO_ODF:         [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_hilo_odf)],
-            HILO_DATOS:       [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_hilo_datos)],
-        },
-        fallbacks=[CommandHandler("cancelar", cancelar)],
-        allow_reentry=True,
-    )
-    app.add_handler(conv)
-    # Iniciar ping para mantener Render despierto
-    t = threading.Thread(target=keep_alive, daemon=True)
-    t.start()
-    logger.info("🚀 RecorridosIA arrancando...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.set_event_loop(asyncio.new_event_loop())
-    main()
