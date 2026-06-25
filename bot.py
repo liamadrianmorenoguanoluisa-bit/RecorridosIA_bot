@@ -1,14 +1,14 @@
 """
 RecorridosIA — Bot completo en un solo archivo
 @RecorridosIA_bot
-
+ 
 Variables de entorno (configurar en Render):
     BOT_TOKEN       = token del bot de Telegram
     GEMINI_API_KEY  = clave de API de Google Gemini AI
     MAPILLARY_TOKEN = token de acceso a Mapillary
     TOTP_SECRET     = clave secreta para acceso al bot (2FA)
 """
-
+ 
 import os
 import io
 import hmac
@@ -27,19 +27,19 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     ConversationHandler, ContextTypes, filters
 )
-
+ 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
+ 
 BOT_TOKEN       = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY  = os.getenv("GEMINI_API_KEY")
 MAPILLARY_TOKEN = os.getenv("MAPILLARY_TOKEN")
 TOTP_SECRET     = os.getenv("TOTP_SECRET")
-
+ 
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-
+ 
 USUARIOS_AUTENTICADOS = set()
-
+ 
 # ── Estados ──────────────────────────────────────────────────────────────────
 (
     ESPERANDO_TOTP, MENU_PRINCIPAL,
@@ -50,7 +50,7 @@ USUARIOS_AUTENTICADOS = set()
     MANGA_NOMBRE, MANGA_COORDS, MANGA_OBS,
     HILO_ODF, HILO_DATOS,
 ) = range(23)
-
+ 
 # ── Novedades Telconet ────────────────────────────────────────────────────────
 REMEDIOS = {
     "VEGETACIÓN SOBRE FIBRA/MANGA.": "REALIZAR LA PODA O RETIRO DE VEGETACIÓN QUE COMPROMETA LA INTEGRIDAD O SEGURIDAD DEL CABLE.",
@@ -75,12 +75,12 @@ REMEDIOS = {
 }
 SIN_NOVEDAD_MOTIVO  = "NO SE REGISTRAN NOVEDADES DURANTE LA INSPECCIÓN."
 SIN_NOVEDAD_REMEDIO = "EN ESTE PUNTO LA FIBRA SE ENCUENTRA SIN NOVEDAD."
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════════════════════════════
 #  TOTP
 # ══════════════════════════════════════════════════════════════════════════════
-
+ 
 def verificar_codigo_totp(codigo: str) -> bool:
     if not TOTP_SECRET:
         return True
@@ -97,12 +97,12 @@ def verificar_codigo_totp(codigo: str) -> bool:
     except Exception:
         pass
     return False
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════════════════════════════
 #  GEMINI AI
 # ══════════════════════════════════════════════════════════════════════════════
-
+ 
 async def analizar_imagen_gemini(img_bytes: bytes) -> dict | None:
     img_b64 = base64.b64encode(img_bytes).decode()
     prompt  = """Eres experto en inspección de rutas de fibra óptica Telconet Ecuador.
@@ -134,38 +134,38 @@ Solo JSON, sin texto extra."""
     except Exception as e:
         logger.error(f"Gemini error: {e}")
         return None
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════════════════════════════
 #  EXCEL
 # ══════════════════════════════════════════════════════════════════════════════
-
+ 
 def generar_excel(datos: dict) -> bytes:
     from openpyxl import Workbook
     wb  = Workbook()
     r   = datos["recorrido"]
-
+ 
     # ── Hoja 1: REPORTES_DE_RECORRIDOS ───────────────────────────────────────
     ws1 = wb.active
     ws1.title = "REPORTES_DE_RECORRIDOS"
     ws1.column_dimensions["A"].width = 45
     ws1.column_dimensions["B"].width = 20
-
+ 
     header = Font(bold=True, color="FFFFFF")
     fill_h = PatternFill("solid", fgColor="1F4E79")
     fill_n = PatternFill("solid", fgColor="D6E4F0")
-
+ 
     def fila(ws, label, valor, fill=None):
         row = ws.max_row + 1
         ws.cell(row, 1, label).font = Font(bold=True)
         if fill:
             ws.cell(row, 1).fill = fill
         ws.cell(row, 2, valor)
-
+ 
     ws1.append(["REPORTE DE RECORRIDO DE RUTAS INTERURBANAS DE F.O. — FOR FO 02"])
     ws1["A1"].font = Font(bold=True, size=12, color="FFFFFF")
     ws1["A1"].fill = PatternFill("solid", fgColor="1F4E79")
-
+ 
     fila(ws1, "FECHA",            r["fecha"])
     fila(ws1, "HORA INICIO",      r["hora_inicio"])
     fila(ws1, "HORA FIN",         r["hora_fin"])
@@ -180,7 +180,7 @@ def generar_excel(datos: dict) -> bytes:
     fila(ws1, "PLACA VEHÍCULO",   datos["ciu"].get("vehiculo_placa",""))
     fila(ws1, "OBSERVACIONES",    r["observaciones"])
     ws1.append([])
-
+ 
     for nov in r["novedades"]:
         ws1.append([f"NOVEDAD #{nov.get('numero','')}"])
         ws1.cell(ws1.max_row, 1).fill = fill_n
@@ -191,24 +191,24 @@ def generar_excel(datos: dict) -> bytes:
         fila(ws1, "TAREA PEND.",  nov.get("tarea_pendiente",""))
         fila(ws1, "COORDENADAS",  nov.get("coordenadas",""))
         ws1.append([])
-
+ 
     # ── Hoja 2: Checklist MPRIU ───────────────────────────────────────────────
     ws2 = wb.create_sheet("Checklists MPRIU")
     ws2.column_dimensions["A"].width = 50
     ws2.column_dimensions["B"].width = 10
     ws2.column_dimensions["C"].width = 10
-
+ 
     ws2.append(["CHECKLIST MPRIU — FOR FO 08"])
     ws2["A1"].font = Font(bold=True, color="FFFFFF")
     ws2["A1"].fill = PatternFill("solid", fgColor="1F4E79")
     ws2.append(["NOVEDAD", "CHECK", "CANTIDAD"])
-
+ 
     for motivo, vals in datos["mpriu"].get("novedades_check", {}).items():
         ws2.append([motivo, "SI" if vals.get("check") else "NO", vals.get("cantidad", 0)])
-
+ 
     ws2.append([])
     ws2.append(["OBSERVACIONES", datos["mpriu"].get("observaciones","")])
-
+ 
     # ── Hoja 3: MANGAS ────────────────────────────────────────────────────────
     if datos.get("mangas"):
         ws3 = wb.create_sheet("MANGAS")
@@ -216,7 +216,7 @@ def generar_excel(datos: dict) -> bytes:
         ws3["A1"].font = Font(bold=True)
         for m in datos["mangas"]:
             ws3.append([m.get("nombre",""), m.get("derivacion","NO"), m.get("coordenadas",""), m.get("observacion","")])
-
+ 
     # ── Hoja 4: INVENTARIO HILOS ──────────────────────────────────────────────
     if datos["hilos"].get("filas"):
         ws4 = wb.create_sheet("INVENTARIO DE HILOS EN NODO")
@@ -224,13 +224,13 @@ def generar_excel(datos: dict) -> bytes:
         ws4.append(["HILO", "DESCRIPCIÓN", "ESTADO"])
         for h in datos["hilos"]["filas"]:
             ws4.append([h.get("hilo_par",""), h.get("descripcion",""), h.get("estado","")])
-
+ 
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
     return buf.read()
-
-
+ 
+ 
 def datos_vacios():
     return {
         "recorrido": {
@@ -246,8 +246,8 @@ def datos_vacios():
         "mangas": [],
         "hilos":  {"posicion_odf": "", "filas": []},
     }
-
-
+ 
+ 
 def novedad_vacia(numero):
     ahora = datetime.now()
     return {
@@ -256,18 +256,18 @@ def novedad_vacia(numero):
         "motivo": "", "remedio": "", "tarea_pendiente": "", "coordenadas": "",
         "foto_antes": None, "foto_despues": None,
     }
-
-
+ 
+ 
 def nombre_archivo(datos):
     ruta  = datos["recorrido"]["nombre_ruta"].split()[0].replace("/","-")
     fecha = datetime.now().strftime("%Y%m%d_%H%M")
     return f"FOR_FO_02_{ruta}_{fecha}.xlsx"
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════════════════════════════
 #  BOT HANDLERS
 # ══════════════════════════════════════════════════════════════════════════════
-
+ 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id in USUARIOS_AUTENTICADOS:
         return await menu_principal(update, ctx)
@@ -277,8 +277,8 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown", reply_markup=ReplyKeyboardRemove()
     )
     return ESPERANDO_TOTP
-
-
+ 
+ 
 async def verificar_totp(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if verificar_codigo_totp(update.message.text.strip()):
         USUARIOS_AUTENTICADOS.add(update.effective_user.id)
@@ -286,8 +286,8 @@ async def verificar_totp(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await menu_principal(update, ctx)
     await update.message.reply_text("❌ Código incorrecto. Intenta de nuevo:")
     return ESPERANDO_TOTP
-
-
+ 
+ 
 async def menu_principal(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     teclado = [["🔍 Inspeccionar", "🗺 Nueva Ruta Base"], ["📋 Mis Rutas", "❓ Ayuda"]]
     await update.message.reply_text(
@@ -296,8 +296,8 @@ async def menu_principal(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True)
     )
     return MENU_PRINCIPAL
-
-
+ 
+ 
 async def inspeccionar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in USUARIOS_AUTENTICADOS:
         return await start(update, ctx)
@@ -309,48 +309,48 @@ async def inspeccionar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown", reply_markup=ReplyKeyboardRemove()
     )
     return NOMBRE_RUTA
-
-
+ 
+ 
 async def recv_nombre_ruta(update, ctx):
     ctx.user_data["datos"]["recorrido"]["nombre_ruta"] = update.message.text.upper()
     await update.message.reply_text("📝 ¿Código de cuadrilla?\n_Ejemplo: FO UIO INT 04_", parse_mode="Markdown")
     return CODIGO_CUADRILLA
-
+ 
 async def recv_cuadrilla(update, ctx):
     ctx.user_data["datos"]["recorrido"]["codigo_cuadrilla"] = update.message.text.upper()
     await update.message.reply_text("📝 ¿Nodo inicial?\n_Ejemplo: GOSSEAL_", parse_mode="Markdown")
     return NODO_INICIAL
-
+ 
 async def recv_nodo_inicial(update, ctx):
     ctx.user_data["datos"]["recorrido"]["nodo_inicial"] = update.message.text.upper()
     await update.message.reply_text("📝 ¿Nodo final?\n_Ejemplo: MACHACHI_", parse_mode="Markdown")
     return NODO_FINAL
-
+ 
 async def recv_nodo_final(update, ctx):
     ctx.user_data["datos"]["recorrido"]["nodo_final"] = update.message.text.upper()
     await update.message.reply_text("👷 ¿Nombre del líder de cuadrilla?", parse_mode="Markdown")
     return LIDER
-
+ 
 async def recv_lider(update, ctx):
     ctx.user_data["datos"]["recorrido"]["lider"] = update.message.text.upper()
     await update.message.reply_text("👷 ¿Nombre del ayudante técnico?", parse_mode="Markdown")
     return AYUDANTE
-
+ 
 async def recv_ayudante(update, ctx):
     ctx.user_data["datos"]["recorrido"]["ayudante"] = update.message.text.upper()
     await update.message.reply_text("👷 ¿Nombre del coordinador de fibra óptica?", parse_mode="Markdown")
     return COORDINADOR
-
+ 
 async def recv_coordinador(update, ctx):
     ctx.user_data["datos"]["recorrido"]["coordinador"] = update.message.text.upper()
     await update.message.reply_text("🚗 ¿Placa del vehículo?\n_Ejemplo: PCO3940_", parse_mode="Markdown")
     return PLACA
-
+ 
 async def recv_placa(update, ctx):
     ctx.user_data["datos"]["ciu"]["vehiculo_placa"] = update.message.text.upper()
     await update.message.reply_text("📏 ¿Distancia de la ruta?\n_Ejemplo: 59KM_", parse_mode="Markdown")
     return DISTANCIA
-
+ 
 async def recv_distancia(update, ctx):
     ctx.user_data["datos"]["ciu"]["distancia_ruta"] = update.message.text.upper()
     ctx.user_data["datos"]["recorrido"]["hora_inicio"] = datetime.now().strftime("%H:%M:%S")
@@ -359,7 +359,7 @@ async def recv_distancia(update, ctx):
         parse_mode="Markdown"
     )
     return NOVEDADES_AUTO
-
+ 
 async def recv_media(update, ctx):
     if "media_inspeccion" not in ctx.user_data:
         ctx.user_data["media_inspeccion"] = []
@@ -369,7 +369,7 @@ async def recv_media(update, ctx):
         n = len(ctx.user_data["media_inspeccion"])
         await update.message.reply_text(f"📷 Foto {n} recibida. Envía más o escribe *LISTO*", parse_mode="Markdown")
     return NOVEDADES_AUTO
-
+ 
 async def procesar_novedades(update, ctx):
     if update.message.text.upper() != "LISTO":
         return NOVEDADES_AUTO
@@ -402,14 +402,14 @@ async def procesar_novedades(update, ctx):
     )
     ctx.user_data["novedad_actual"] = 0
     return TAREA_PENDIENTE
-
+ 
 async def recv_tarea(update, ctx):
     idx = ctx.user_data["novedad_actual"]
     if update.message.text.upper() != "NINGUNA":
         ctx.user_data["datos"]["recorrido"]["novedades"][idx]["tarea_pendiente"] = update.message.text.upper()
     await update.message.reply_text(f"📸 Foto *ANTES* mantenimiento novedad #{idx+1}\n_Sin foto escribe: SALTAR_", parse_mode="Markdown")
     return FOTO_ANTES
-
+ 
 async def recv_foto_antes(update, ctx):
     idx = ctx.user_data["novedad_actual"]
     if update.message.photo:
@@ -417,7 +417,7 @@ async def recv_foto_antes(update, ctx):
         ctx.user_data["datos"]["recorrido"]["novedades"][idx]["foto_antes"] = bytes(await foto.download_as_bytearray())
     await update.message.reply_text(f"📸 Foto *DESPUÉS* mantenimiento novedad #{idx+1}\n_Sin foto escribe: SALTAR_", parse_mode="Markdown")
     return FOTO_DESPUES
-
+ 
 async def recv_foto_despues(update, ctx):
     idx   = ctx.user_data["novedad_actual"]
     datos = ctx.user_data["datos"]
@@ -432,7 +432,7 @@ async def recv_foto_despues(update, ctx):
         return TAREA_PENDIENTE
     await update.message.reply_text("📝 ¿*Observaciones generales*?\n_Si no hay: NINGUNA_", parse_mode="Markdown")
     return OBSERVACIONES
-
+ 
 async def recv_observaciones(update, ctx):
     datos = ctx.user_data["datos"]
     if update.message.text.upper() != "NINGUNA":
@@ -445,7 +445,7 @@ async def recv_observaciones(update, ctx):
         reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True, one_time_keyboard=True)
     )
     return PREGUNTA_MANGAS
-
+ 
 async def pregunta_mangas(update, ctx):
     if "SÍ" in update.message.text or "SI" in update.message.text.upper():
         await update.message.reply_text("🔧 Nombre de la manga:\n_Ejemplo: UIO-B-MAC/GOS-F1-DER-01_\nCuando termines: *FIN MANGAS*", parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
@@ -453,7 +453,7 @@ async def pregunta_mangas(update, ctx):
     teclado = [["✅ SÍ, hubo cambio en ODF", "❌ No hubo cambio"]]
     await update.message.reply_text("💡 ¿Hubo *cambio en ODF*?", parse_mode="Markdown", reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True, one_time_keyboard=True))
     return PREGUNTA_HILOS
-
+ 
 async def recv_manga_nombre(update, ctx):
     if update.message.text.upper() == "FIN MANGAS":
         teclado = [["✅ SÍ, hubo cambio en ODF", "❌ No hubo cambio"]]
@@ -462,30 +462,30 @@ async def recv_manga_nombre(update, ctx):
     ctx.user_data["manga_temp"] = {"nombre": update.message.text.upper(), "derivacion": "NO"}
     await update.message.reply_text("📍 Coordenadas:\n_Ejemplo: -0.477057,-78.579350_", parse_mode="Markdown")
     return MANGA_COORDS
-
+ 
 async def recv_manga_coords(update, ctx):
     ctx.user_data["manga_temp"]["coordenadas"] = update.message.text
     await update.message.reply_text("📝 Observación:\n_Si no hay: NINGUNA_", parse_mode="Markdown")
     return MANGA_OBS
-
+ 
 async def recv_manga_obs(update, ctx):
     manga = ctx.user_data.pop("manga_temp")
     manga["observacion"] = "" if update.message.text.upper() == "NINGUNA" else update.message.text
     ctx.user_data["datos"]["mangas"].append(manga)
     await update.message.reply_text("✅ Manga guardada. Siguiente nombre o *FIN MANGAS*:", parse_mode="Markdown")
     return MANGA_NOMBRE
-
+ 
 async def pregunta_hilos(update, ctx):
     if "SÍ" in update.message.text or "SI" in update.message.text.upper():
         await update.message.reply_text("💡 ¿Posición del ODF?\n_Ejemplo: ODF #3_", parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
         return HILO_ODF
     return await enviar_excel(update, ctx)
-
+ 
 async def recv_hilo_odf(update, ctx):
     ctx.user_data["datos"]["hilos"]["posicion_odf"] = update.message.text.upper()
     await update.message.reply_text("💡 Ingresa hilos:\n`HILO, DESCRIPCION, ESTADO`\n_Ejemplo: 1, TELCONET, OCUPADO_\nCuando termines: *FIN HILOS*", parse_mode="Markdown")
     return HILO_DATOS
-
+ 
 async def recv_hilo_datos(update, ctx):
     if update.message.text.upper() == "FIN HILOS":
         return await enviar_excel(update, ctx)
@@ -494,7 +494,7 @@ async def recv_hilo_datos(update, ctx):
         ctx.user_data["datos"]["hilos"]["filas"].append({"hilo_par": partes[0].strip(), "descripcion": partes[1].strip(), "estado": partes[2].strip().upper()})
     await update.message.reply_text("✅ Guardado. Siguiente o *FIN HILOS*:", parse_mode="Markdown")
     return HILO_DATOS
-
+ 
 async def enviar_excel(update, ctx):
     await update.message.reply_text("⚙️ Generando informe *FOR FO 02*...", parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
     try:
@@ -511,17 +511,17 @@ async def enviar_excel(update, ctx):
     teclado = [["🔍 Inspeccionar", "🗺 Nueva Ruta Base"], ["📋 Mis Rutas"]]
     await update.message.reply_text("¿Qué deseas hacer?", reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True))
     return MENU_PRINCIPAL
-
+ 
 async def cancelar(update, ctx):
     ctx.user_data.clear()
     await update.message.reply_text("❌ Cancelado.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════════════════════════════
 #  ARRANQUE
 # ══════════════════════════════════════════════════════════════════════════════
-
+ 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     conv = ConversationHandler(
@@ -557,6 +557,8 @@ def main():
     app.add_handler(conv)
     logger.info("🚀 RecorridosIA arrancando...")
     app.run_polling()
-
+ 
 if __name__ == "__main__":
+    import asyncio
+    asyncio.set_event_loop(asyncio.new_event_loop())
     main()
