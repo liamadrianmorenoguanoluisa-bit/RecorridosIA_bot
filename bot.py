@@ -20,9 +20,46 @@ GEMINI_URL      = "https://generativelanguage.googleapis.com/v1beta/models/gemin
 USUARIOS_AUTENTICADOS = set()
 
 (ESPERANDO_TOTP, MENU_PRINCIPAL, NOMBRE_RUTA, CODIGO_CUADRILLA, NODO_INICIAL, NODO_FINAL,
- LIDER, AYUDANTE, COORDINADOR, PLACA, DISTANCIA, NOVEDADES_AUTO, TAREA_PENDIENTE,
- FOTO_ANTES, FOTO_DESPUES, OBSERVACIONES, PREGUNTA_MANGAS, PREGUNTA_HILOS,
- MANGA_NOMBRE, MANGA_COORDS, MANGA_OBS, HILO_ODF, HILO_DATOS) = range(23)
+ LIDER, AYUDANTE, COORDINADOR, PLACA, DISTANCIA,
+ CIU_HERRAMIENTAS, CIU_EQUIPOS, CIU_MATERIALES,
+ NOVEDADES_AUTO, TAREA_PENDIENTE,
+ FOTO_ANTES, FOTO_DESPUES, OBSERVACIONES,
+ MPRIU_CHECK,
+ PREGUNTA_MANGAS, PREGUNTA_HILOS,
+ MANGA_NOMBRE, MANGA_COORDS, MANGA_OBS, HILO_ODF, HILO_DATOS) = range(27)
+
+# Herramientas CIU agrupadas para preguntar por grupos
+HERRAMIENTAS_CIU = [
+    ("Cinturon y Linea de Vida", "cinturon"),
+    ("Casco", "casco"),
+    ("Escalera de 28 pies", "escalera_28"),
+    ("Conos reflectivos", "conos"),
+    ("Juego de destornilladores", "destornilladores"),
+    ("Martillo mediano", "martillo"),
+    ("Estiletes", "estiletes"),
+    ("Cortafrio", "cortafrio"),
+    ("Juego de rachet", "rachet"),
+    ("Pares de guantes aislantes", "guantes"),
+    ("Tecle", "tecle"),
+    ("Machete", "machete"),
+    ("Cizalla", "cizalla"),
+]
+EQUIPOS_CIU = [
+    ("Fusionadora", "fusionadora"),
+    ("Cortadora de fibra", "cortadora"),
+    ("OTDR con cargador", "otdr"),
+    ("Llave Acsys", "acsys"),
+    ("Inversor", "inversor"),
+    ("Etiquetadora", "etiquetadora"),
+]
+MATERIALES_CIU = [
+    ("Fibra 48h (500mt)", "fibra"),
+    ("Mangas de 48h y/o 144h", "mangas_mat"),
+    ("Rollo de cinta Eriband 3/4", "eriband"),
+    ("Patchcord de fibra", "patchcord"),
+    ("Adaptadores (Simplex-Duplex)", "adaptadores"),
+    ("Paquetes de amarras", "amarras"),
+]
 
 REMEDIOS = {
     "VEGETACION SOBRE FIBRA/MANGA.": "REALIZAR LA PODA O RETIRO DE VEGETACION QUE COMPROMETA LA INTEGRIDAD DEL CABLE.",
@@ -282,7 +319,6 @@ def generar_excel(datos):
     ws2["B3"].font = Font(bold=True, name="Arial", size=9)
 
     fila2 = 4
-    from openpyxl.drawing.image import Image as XLImage
     for nov in r["novedades"]:
         num = nov.get("numero","")
         ws2.merge_cells(f"B{fila2}:D{fila2}")
@@ -297,15 +333,8 @@ def generar_excel(datos):
         fila2 += 1
 
         ws2.row_dimensions[fila2].height = 90
-        for col, key in [(2, "foto_antes"), (4, "foto_despues")]:
-            foto = nov.get(key)
-            if foto:
-                try:
-                    img = XLImage(io.BytesIO(foto))
-                    img.width, img.height = 160, 110
-                    ws2.add_image(img, ws2.cell(fila2, col).coordinate)
-                except Exception:
-                    pass
+        ws2.cell(fila2, 2, "[FOTO ANTES]").font = Font(name="Arial", size=9, color="808080")
+        ws2.cell(fila2, 4, "[FOTO DESPUES]").font = Font(name="Arial", size=9, color="808080")
         fila2 += 2
 
     ws2.cell(fila2, 2, "NODO FINAL DEL RECORRIDO").font = Font(bold=True, name="Arial", size=9)
@@ -615,8 +644,90 @@ async def recv_placa(update, ctx):
 async def recv_distancia(update, ctx):
     ctx.user_data["datos"]["ciu"]["distancia_ruta"] = update.message.text.upper()
     ctx.user_data["datos"]["recorrido"]["hora_inicio"] = datetime.now().strftime("%H:%M:%S")
-    await update.message.reply_text("Envia las fotos de la inspeccion.\nCuando termines escribe: LISTO")
+    ctx.user_data["datos"]["ciu"]["herramientas"] = {}
+    ctx.user_data["datos"]["ciu"]["equipos"] = {}
+    ctx.user_data["datos"]["ciu"]["materiales"] = {}
+    ctx.user_data["ciu_idx"] = 0
+
+    msg = "CHECKLIST CIU - HERRAMIENTAS Y EPP\n\n"
+    msg += "Indica cantidad de cada item (0 si no llevas):\n\n"
+    for nombre, _ in HERRAMIENTAS_CIU:
+        msg += "- " + nombre + ":\n"
+    msg += "\nEnvia en formato:\n1, 2, 6, 1, 1, 2, 2, 2, 1, 2, 2, 2, 1"
+    msg += "\n(un numero por cada item en orden)"
+    await update.message.reply_text(msg, reply_markup=ReplyKeyboardRemove())
+    return CIU_HERRAMIENTAS
+
+async def recv_ciu_herramientas(update, ctx):
+    datos = ctx.user_data["datos"]
+    texto = update.message.text.strip()
+    valores = [v.strip() for v in texto.replace(",", " ").split()]
+    for i, (nombre, key) in enumerate(HERRAMIENTAS_CIU):
+        cantidad = int(valores[i]) if i < len(valores) and valores[i].isdigit() else 0
+        estado = "BUEN ESTADO" if cantidad > 0 else "NINGUNA"
+        datos["ciu"]["herramientas"][nombre] = {"cantidad": cantidad, "obs": estado}
+
+    msg = "CHECKLIST CIU - EQUIPOS ELECTRONICOS\n\n"
+    msg += "Indica cantidad de cada equipo:\n\n"
+    for nombre, _ in EQUIPOS_CIU:
+        msg += "- " + nombre + ":\n"
+    msg += "\nEnvia en formato:\n1, 2, 1, 1, 1, 1"
+    await update.message.reply_text(msg)
+    return CIU_EQUIPOS
+
+async def recv_ciu_equipos(update, ctx):
+    datos = ctx.user_data["datos"]
+    texto = update.message.text.strip()
+    valores = [v.strip() for v in texto.replace(",", " ").split()]
+    for i, (nombre, key) in enumerate(EQUIPOS_CIU):
+        cantidad = int(valores[i]) if i < len(valores) and valores[i].isdigit() else 0
+        estado = "BUEN ESTADO" if cantidad > 0 else "NINGUNA"
+        datos["ciu"]["equipos"][nombre] = {"cantidad": cantidad, "obs": estado}
+
+    msg = "CHECKLIST CIU - MATERIALES E INSUMOS\n\n"
+    msg += "Indica cantidad de cada material:\n\n"
+    for nombre, _ in MATERIALES_CIU:
+        msg += "- " + nombre + ":\n"
+    msg += "\nEnvia en formato:\n335, 2, 1, 2, 10, 2"
+    await update.message.reply_text(msg)
+    return CIU_MATERIALES
+
+async def recv_ciu_materiales(update, ctx):
+    datos = ctx.user_data["datos"]
+    texto = update.message.text.strip()
+    valores = [v.strip() for v in texto.replace(",", " ").split()]
+    for i, (nombre, key) in enumerate(MATERIALES_CIU):
+        cantidad = int(valores[i]) if i < len(valores) and valores[i].isdigit() else 0
+        estado = "BUEN ESTADO" if cantidad > 0 else "NINGUNA"
+        datos["ciu"]["materiales"][nombre] = {"cantidad": cantidad, "obs": estado}
+
+    await update.message.reply_text(
+        "Checklist CIU completado\n\n"
+        "Ahora envia las FOTOS de la inspeccion.\n"
+        "Cuando termines escribe: LISTO"
+    )
     return NOVEDADES_AUTO
+
+async def recv_mpriu(update, ctx):
+    datos = ctx.user_data["datos"]
+    texto = update.message.text.strip().upper()
+    if texto == "LISTO":
+        return await recv_observaciones_mpriu(update, ctx)
+    teclado = [["LISTO - terminar checklist"]]
+    await update.message.reply_text(
+        "Escribe LISTO para continuar o sigue marcando novedades.",
+        reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True)
+    )
+    return MPRIU_CHECK
+
+async def recv_observaciones_mpriu(update, ctx):
+    datos = ctx.user_data["datos"]
+    teclado = [["SI, hubo cambio de mangas", "No hubo cambio"]]
+    await update.message.reply_text(
+        "Checklist MPRIU completado\n\nHubo cambio de mangas?",
+        reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True, one_time_keyboard=True)
+    )
+    return PREGUNTA_MANGAS
 
 async def recv_media(update, ctx):
     if "media_inspeccion" not in ctx.user_data:
@@ -693,10 +804,22 @@ async def recv_observaciones(update, ctx):
     datos = ctx.user_data["datos"]
     if update.message.text.upper() != "NINGUNA":
         datos["recorrido"]["observaciones"] = update.message.text.upper()
+        datos["mpriu"]["observaciones"] = update.message.text.upper()
     datos["recorrido"]["hora_fin"] = datetime.now().strftime("%H:%M:%S")
-    teclado = [["SI, hubo cambio de mangas", "No hubo cambio"]]
-    await update.message.reply_text("Hubo cambio de mangas?", reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True, one_time_keyboard=True))
-    return PREGUNTA_MANGAS
+
+    # Mostrar checklist MPRIU
+    msg = "CHECKLIST MPRIU - Marca las novedades encontradas\n\n"
+    msg += "La IA ya detecto estas novedades automaticamente:\n"
+    novedades_ia = datos["mpriu"].get("novedades_check", {})
+    for nov, vals in novedades_ia.items():
+        msg += "SI - " + nov + " (cantidad: " + str(vals.get("cantidad",0)) + ")\n"
+    msg += "\nSi hay novedades adicionales que la IA no detecto,\n"
+    msg += "escribe el nombre exacto y cantidad. Ejemplo:\n"
+    msg += "POSTES INCLINADOS: 2\n\n"
+    msg += "Si no hay adicionales escribe: LISTO"
+    teclado = [["LISTO - terminar checklist"]]
+    await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True))
+    return MPRIU_CHECK
 
 async def pregunta_mangas(update, ctx):
     if "SI" in update.message.text.upper():
@@ -799,7 +922,11 @@ def build_app():
             TAREA_PENDIENTE:  [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_tarea)],
             FOTO_ANTES:       [MessageHandler(filters.PHOTO, recv_foto_antes), MessageHandler(filters.TEXT & ~filters.COMMAND, recv_foto_antes)],
             FOTO_DESPUES:     [MessageHandler(filters.PHOTO, recv_foto_despues), MessageHandler(filters.TEXT & ~filters.COMMAND, recv_foto_despues)],
+            CIU_HERRAMIENTAS: [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_ciu_herramientas)],
+            CIU_EQUIPOS:      [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_ciu_equipos)],
+            CIU_MATERIALES:   [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_ciu_materiales)],
             OBSERVACIONES:    [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_observaciones)],
+            MPRIU_CHECK:      [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_mpriu)],
             PREGUNTA_MANGAS:  [MessageHandler(filters.TEXT & ~filters.COMMAND, pregunta_mangas)],
             MANGA_NOMBRE:     [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_manga_nombre)],
             MANGA_COORDS:     [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_manga_coords)],
@@ -814,10 +941,26 @@ def build_app():
     app.add_handler(conv)
     return app
 
-if __name__ == "__main__":
-    # Servidor web en hilo secundario
-    t = threading.Thread(target=start_web, daemon=True)
-    t.start()
-    # Bot en hilo principal
+async def run_bot():
+    import asyncio
+    app = build_app()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
     logger.info("RecorridosIA bot arrancando...")
-    build_app().run_polling()
+    while True:
+        await asyncio.sleep(1)
+
+def bot_thread():
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(run_bot())
+
+if __name__ == "__main__":
+    # Bot en hilo secundario con su propio event loop
+    t = threading.Thread(target=bot_thread, daemon=True)
+    t.start()
+    logger.info("RecorridosIA bot arrancando...")
+    # Servidor web en hilo PRINCIPAL — Render no mata el proceso
+    start_web()
