@@ -896,10 +896,26 @@ class PingHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
+def ping_render():
+    """Hace ping cada 4 minutos a si mismo para no dormirse."""
+    import urllib.request
+    while True:
+        time.sleep(720)
+        try:
+            url = os.getenv("RENDER_EXTERNAL_URL", "")
+            if url:
+                urllib.request.urlopen(url, timeout=10)
+                logger.info("Ping OK - bot despierto")
+        except Exception as e:
+            logger.warning("Ping error: " + str(e))
+
 def start_web():
     port = int(os.getenv("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), PingHandler)
     logger.info("Servidor web en puerto " + str(port))
+    # Ping en hilo separado
+    t = threading.Thread(target=ping_render, daemon=True)
+    t.start()
     server.serve_forever()
 
 def build_app():
