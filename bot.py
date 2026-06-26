@@ -184,130 +184,121 @@ MATERIALES_INSUMOS = [
     "Repelente contra insectos", "Repelente contra abejas y avispas",
 ]
 
-# ─── helpers de estilo ────────────────────────────────────────────────────────
-def _s(ws, coord, valor, bold=False, size=11, color="000000", bg=None, halign="left", wrap=True, italic=False):
-    from openpyxl.styles import Alignment
-    c = ws[coord] if isinstance(coord, str) else ws.cell(coord[0], coord[1])
-    c.value = valor
-    c.font = Font(bold=bold, size=size, color=color, name="Calibri", italic=italic)
+# Colores exactos del original Telconet
+AZUL      = "0000FF"   # titulos principales
+GRIS_OSC  = "969696"   # FECHA Y HORA header
+GRIS_MED  = "D9D9D9"   # labels datos generales
+GRIS_CLAR = "C0C0C0"   # labels de novedad
+AZUL_MANG = "1F4E79"   # mangas header
+AZUL_CIU  = "0070C0"   # CIU/MPRIU headers
+VERDE     = "00B050"
+ROJO      = "FF0000"
+GRIS_LEY  = "808080"
+TEXTO     = "333333"
+BLANCO    = "FFFFFF"
+
+def cel(ws, fila, col, valor, bold=False, size=11, color=TEXTO, bg=None, halign="left", wrap=True, merge_to=None):
+    from openpyxl.styles import Alignment as Al
+    c = ws.cell(fila, col, valor)
+    c.font = Font(bold=bold, size=size, color=color, name="Calibri")
     if bg:
         c.fill = PatternFill("solid", fgColor=bg)
-    c.alignment = Alignment(horizontal=halign, vertical="center", wrap_text=wrap)
+    c.alignment = Al(horizontal=halign, vertical="center", wrap_text=wrap)
+    if merge_to:
+        ws.merge_cells(start_row=fila, start_column=col, end_row=merge_to[0], end_column=merge_to[1])
     return c
 
-def _m(ws, r1, c1, r2, c2):
-    ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
-
 def generar_excel(datos):
-    from openpyxl.styles import Alignment, Border, Side
+    from openpyxl.styles import Alignment as Al
     wb = Workbook()
-    r = datos["recorrido"]
+    r   = datos["recorrido"]
     ciu = datos["ciu"]
-    novedades_check = datos["mpriu"].get("novedades_check", {})
+    nch = datos["mpriu"].get("novedades_check", {})
 
-    thin = Side(style="thin")
-    borde = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-    # ══════════════════════════════════════════════════════════════════
-    # HOJA 1: REPORTES_DE_RECORRIDOS
-    # ══════════════════════════════════════════════════════════════════
+    # ══ HOJA 1: REPORTES_DE_RECORRIDOS ══════════════════════════════
     ws1 = wb.active
     ws1.title = "REPORTES_DE_RECORRIDOS"
-    ws1.column_dimensions["A"].width = 41
-    ws1.column_dimensions["B"].width = 35
-    ws1.column_dimensions["C"].width = 32
-    ws1.column_dimensions["D"].width = 30
+    ws1.column_dimensions["A"].width = 41.11
+    ws1.column_dimensions["B"].width = 35.56
+    ws1.column_dimensions["C"].width = 32.34
+    ws1.column_dimensions["D"].width = 30.56
 
-    # Fila 2 — titulo + codigo
+    # Fila 2 — titulo
     ws1.row_dimensions[2].height = 57
-    _m(ws1, 2,2, 2,3)
-    _s(ws1, (2,2), "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
-       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
-    _s(ws1, (2,4), "Codigo: FOR FO 02\nVersion: 3 (28/05/2021)", bold=True, size=11)
+    cel(ws1,2,2,"REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
+        bold=True,color=BLANCO,bg=AZUL,halign="center",merge_to=(2,3))
+    cel(ws1,2,4,"Codigo: FOR FO 02\nVersion: 3 (28/05/2021)",bold=True,size=11)
 
-    # Fila 4 — subtitulo azul
+    # Fila 4 — subtitulo
     ws1.row_dimensions[4].height = 24
-    _m(ws1, 4,1, 4,4)
-    _s(ws1, (4,1), "REPORTE DE RECORRIDO DE RUTAS INTERURBANAS DE F. O.",
-       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
+    cel(ws1,4,1,"REPORTE DE RECORRIDO DE RUTAS INTERURBANAS DE F. O.",
+        bold=True,color=BLANCO,bg=AZUL,halign="center",merge_to=(4,4))
 
-    # Fila 5 — fecha/hora labels
+    # Fila 5-6 — fecha/hora
     ws1.row_dimensions[5].height = 38
-    _m(ws1, 5,1, 6,1)
-    _s(ws1, (5,1), "FECHA Y HORA DEL RECORRIDO", bold=True, size=11, bg="969696", halign="center")
-    _s(ws1, (5,2), "FECHA", bold=True, size=11)
-    _s(ws1, (5,3), "HORA INICIO", bold=True, size=11)
-    _s(ws1, (5,4), "HORA FIN", bold=True, size=11)
-
-    # Fila 6 — fecha/hora valores
     ws1.row_dimensions[6].height = 38
-    _s(ws1, (6,2), r["fecha"], size=11)
-    _s(ws1, (6,3), r["hora_inicio"], size=11)
-    _s(ws1, (6,4), r["hora_fin"], size=11)
+    ws1.merge_cells(start_row=5,start_column=1,end_row=6,end_column=1)
+    cel(ws1,5,1,"FECHA Y HORA DEL RECORRIDO",bold=True,bg=GRIS_OSC,halign="center",color=TEXTO)
+    cel(ws1,5,2,"FECHA",bold=True,color=TEXTO)
+    cel(ws1,5,3,"HORA INICIO",bold=True,color=TEXTO)
+    cel(ws1,5,4,"HORA FIN",bold=True,color=TEXTO)
+    cel(ws1,6,2,r["fecha"],color=TEXTO)
+    cel(ws1,6,3,r["hora_inicio"],color=TEXTO)
+    cel(ws1,6,4,r["hora_fin"],color=TEXTO)
 
-    # Filas 7-9 — datos cabecera
-    for i, (label, valor) in enumerate([
-        ("NOMBRE DE LA RUTA", r["nombre_ruta"]),
-        ("CODIGO DE CUADRILLA", r["codigo_cuadrilla"]),
-        ("NODO INICIAL", r["nodo_inicial"]),
+    # Filas 7-9 — datos generales
+    for i,(label,valor) in enumerate([
+        ("NOMBRE DE LA RUTA",    r["nombre_ruta"]),
+        ("CODIGO DE CUADRILLA",  r["codigo_cuadrilla"]),
+        ("NODO INICIAL",         r["nodo_inicial"]),
     ]):
-        f = 7 + i
+        f = 7+i
         ws1.row_dimensions[f].height = 38
-        _s(ws1, (f,1), label, bold=True, size=11, bg="D9D9D9")
-        _m(ws1, f,2, f,4)
-        _s(ws1, (f,2), valor, bold=True, size=11)
+        cel(ws1,f,1,label,bold=True,bg=GRIS_MED,color=TEXTO)
+        cel(ws1,f,2,valor,bold=True,color=TEXTO,merge_to=(f,4))
 
-    # Novedades — cada una ocupa 6 filas
+    # Novedades
     fila = 10
     for nov in r["novedades"]:
-        num = str(nov.get("numero", ""))
-        # Header novedad (gris)
+        num = str(nov.get("numero",""))
         ws1.row_dimensions[fila].height = 38
-        _m(ws1, fila,1, fila+1,1)
-        _s(ws1, (fila,1), "FECHA Y HORA NOVEDAD # " + num, bold=True, size=11, bg="969696", halign="center")
-        _s(ws1, (fila,2), "FECHA", bold=True, size=11)
-        _s(ws1, (fila,3), "HORA INICIO", bold=True, size=11)
-        _s(ws1, (fila,4), "HORA FIN", bold=True, size=11)
+        ws1.merge_cells(start_row=fila,start_column=1,end_row=fila+1,end_column=1)
+        cel(ws1,fila,1,"FECHA Y HORA NOVEDAD # "+num,bold=True,bg=GRIS_OSC,color=TEXTO,halign="center")
+        cel(ws1,fila,2,"FECHA",bold=True,color=TEXTO)
+        cel(ws1,fila,3,"HORA INICIO",bold=True,color=TEXTO)
+        cel(ws1,fila,4,"HORA FIN",bold=True,color=TEXTO)
         fila += 1
-
-        # Valores fecha/hora
         ws1.row_dimensions[fila].height = 38
-        _s(ws1, (fila,2), nov.get("fecha",""), size=11)
-        _s(ws1, (fila,3), nov.get("hora_inicio",""), size=11)
-        _s(ws1, (fila,4), nov.get("hora_fin",""), size=11)
+        cel(ws1,fila,2,nov.get("fecha",""),color=TEXTO)
+        cel(ws1,fila,3,nov.get("hora_inicio",""),color=TEXTO)
+        cel(ws1,fila,4,nov.get("hora_fin",""),color=TEXTO)
         fila += 1
-
-        # Campos de novedad
-        for label, key in [
-            ("MOTIVO APARENTE DE LA NOVEDAD", "motivo"),
-            ("REMEDIO DEFINITIVO A LA NOVEDAD", "remedio"),
-            ("TAREA PENDIENTE (por regulatorio/obra civil, contratista)", "tarea_pendiente"),
-            ("COORDENADAS SITIO DE LA NOVEDAD (Grados decimales)", "coordenadas"),
+        for label,key in [
+            ("MOTIVO APARENTE DE LA NOVEDAD","motivo"),
+            ("REMEDIO DEFINITIVO A LA NOVEDAD","remedio"),
+            ("TAREA PENDIENTE (por regulatorio/obra civil, contratista)","tarea_pendiente"),
+            ("COORDENADAS SITIO DE LA NOVEDAD (Grados decimales)","coordenadas"),
         ]:
             ws1.row_dimensions[fila].height = 42
-            _s(ws1, (fila,1), label, bold=True, size=11, bg="C0C0C0")
-            _m(ws1, fila,2, fila,4)
-            _s(ws1, (fila,2), nov.get(key,""), size=11)
+            cel(ws1,fila,1,label,bold=True,bg=GRIS_CLAR,color=TEXTO)
+            cel(ws1,fila,2,nov.get(key,""),color=TEXTO,merge_to=(fila,4))
             fila += 1
 
-    # Pie del reporte
-    for label, bg, valor in [
-        ("NODO FINAL", "D9D9D9", r["nodo_final"]),
-        ("LIDER DE CUADRILLA QUE ELABORA INFORME", "D9D9D9", r["lider"]),
-        ("AYUDANTE TECNICO", "D9D9D9", r["ayudante"]),
-        ("COORDINADOR FIBRA OPTICA", "D9D9D9", r["coordinador"]),
-        ("FOTOS ANEXAS AL REPORTE", "D9D9D9", str(r["fotos_total"])),
-        ("OBSERVACIONES GENERALES", "D9D9D9", r["observaciones"]),
+    # Pie
+    for label,valor in [
+        ("NODO FINAL",r["nodo_final"]),
+        ("LIDER DE CUADRILLA QUE ELABORA INFORME",r["lider"]),
+        ("AYUDANTE TECNICO",r["ayudante"]),
+        ("COORDINADOR FIBRA OPTICA",r["coordinador"]),
+        ("FOTOS ANEXAS AL REPORTE (INDIQUE CUANTAS)",str(r["fotos_total"])),
+        ("OBSERVACIONES GENERALES",r["observaciones"]),
     ]:
         ws1.row_dimensions[fila].height = 38
-        _s(ws1, (fila,1), label, bold=True, size=11, bg=bg)
-        _m(ws1, fila,2, fila,4)
-        _s(ws1, (fila,2), valor, size=11)
+        cel(ws1,fila,1,label,bold=True,bg=GRIS_MED,color=TEXTO)
+        cel(ws1,fila,2,valor,color=TEXTO,merge_to=(fila,4))
         fila += 1
 
-    # ══════════════════════════════════════════════════════════════════
-    # HOJA 2: FOTOS_ANEXAS_AL_REPORTE
-    # ══════════════════════════════════════════════════════════════════
+    # ══ HOJA 2: FOTOS_ANEXAS_AL_REPORTE ═════════════════════════════
     ws2 = wb.create_sheet("FOTOS_ANEXAS_AL_REPORTE")
     ws2.column_dimensions["A"].width = 2.67
     ws2.column_dimensions["B"].width = 19.67
@@ -316,38 +307,37 @@ def generar_excel(datos):
     ws2.column_dimensions["E"].width = 35.77
 
     ws2.row_dimensions[2].height = 57
-    _m(ws2, 2,3, 2,4)
-    _s(ws2, (2,3), "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
-       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
-    _s(ws2, (2,5), "Codigo: FOR FO 02\nVersion: 3 (28/05/2021)", bold=True, size=11)
+    cel(ws2,2,3,"REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
+        bold=True,color=BLANCO,bg=AZUL,halign="center",merge_to=(2,4))
+    cel(ws2,2,5,"Codigo: FOR FO 02\nVersion: 3 (28/05/2021)",bold=True)
 
-    _s(ws2, (3,2), "FOTOS DE LAS ACCIONES CORRECTIVAS", bold=True, size=11, halign="center")
-    _s(ws2, (4,2), "NODO INICIO RECORRIDO", bold=True, size=11)
-    _s(ws2, (4,3), "FOTO", bold=True, size=11, halign="center")
-    _s(ws2, (4,4), "NOMBRE DEL NODO", bold=True, size=11)
-    _s(ws2, (5,4), r["nodo_inicial"], size=11)
+    cel(ws2,4,2,"FOTOS DE LAS ACCIONES CORRECTIVAS",bold=True,color=BLANCO,bg=AZUL,halign="center",merge_to=(4,5))
+    ws2.row_dimensions[4].height = 30
 
-    f2 = 6
+    cel(ws2,7,2,"NODO INICIO RECORRIDO",bold=True,color=TEXTO)
+    cel(ws2,7,3,"FOTO",bold=True,color=BLANCO,bg=AZUL,halign="center")
+    cel(ws2,7,4,"NOMBRE DEL NODO",bold=True,color=BLANCO,bg=AZUL,halign="center")
+    cel(ws2,8,4,r["nodo_inicial"],bold=True,size=24,color=TEXTO)
+
+    f2 = 10
     for nov in r["novedades"]:
         num = str(nov.get("numero",""))
-        _m(ws2, f2,2, f2,4)
-        _s(ws2, (f2,2), "NOVEDAD # " + num, bold=True, size=11, bg="969696", halign="center")
-        f2 += 1
-        _s(ws2, (f2,2), "ANTES DEL MANTENIMIENTO", bold=True, size=11, halign="center")
-        _s(ws2, (f2,4), "DESPUES DEL MANTENIMIENTO", bold=True, size=11, halign="center")
+        cel(ws2,f2,2,"NOVEDAD # "+num,bold=True,color=TEXTO)
+        cel(ws2,f2,3,"ANTES DEL MANTENIMIENTO",bold=True,color=BLANCO,bg=AZUL,halign="center")
+        cel(ws2,f2,4,"DESPUES DEL MANTENIMIENTO",bold=True,color=BLANCO,bg=AZUL,halign="center")
         f2 += 1
         ws2.row_dimensions[f2].height = 315
-        ws2.cell(f2, 3, "[FOTO ANTES - adjuntar manualmente]").font = Font(name="Calibri", size=9, color="808080", italic=True)
-        ws2.cell(f2, 5, "[FOTO DESPUES - adjuntar manualmente]").font = Font(name="Calibri", size=9, color="808080", italic=True)
-        f2 += 1
+        ws2.cell(f2,3).value = "[FOTO ANTES]"
+        ws2.cell(f2,3).font = Font(name="Calibri",size=9,color=GRIS_LEY,italic=True)
+        ws2.cell(f2,4).value = "[FOTO DESPUES]"
+        ws2.cell(f2,4).font = Font(name="Calibri",size=9,color=GRIS_LEY,italic=True)
+        f2 += 2
 
-    _s(ws2, (f2,2), "NODO FINAL DEL RECORRIDO", bold=True, size=11)
-    _s(ws2, (f2,3), "FOTO", bold=True, size=11, halign="center")
-    _s(ws2, (f2,4), r["nodo_final"], size=11)
+    cel(ws2,f2,2,"NODO FINAL DEL RECORRIDO",bold=True,color=TEXTO)
+    cel(ws2,f2,3,"FOTO",bold=True,color=BLANCO,bg=AZUL,halign="center")
+    cel(ws2,f2,4,r["nodo_final"],bold=True,size=24,color=TEXTO)
 
-    # ══════════════════════════════════════════════════════════════════
-    # HOJA 3: MANGAS
-    # ══════════════════════════════════════════════════════════════════
+    # ══ HOJA 3: MANGAS ═══════════════════════════════════════════════
     ws3 = wb.create_sheet("MANGAS")
     ws3.column_dimensions["A"].width = 2.67
     ws3.column_dimensions["B"].width = 24.78
@@ -356,74 +346,72 @@ def generar_excel(datos):
     ws3.column_dimensions["E"].width = 34.78
 
     ws3.row_dimensions[2].height = 57
-    _m(ws3, 2,3, 2,4)
-    _s(ws3, (2,3), "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
-       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
-    _s(ws3, (2,5), "Codigo: FOR FO 02\nVersion: 3 (28/05/2021)", bold=True, size=11)
+    cel(ws3,2,3,"REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
+        bold=True,color=BLANCO,bg=AZUL,halign="center",merge_to=(2,4))
+    cel(ws3,2,5,"Codigo: FOR FO 02\nVersion: 3 (28/05/2021)",bold=True)
+    cel(ws3,4,2,"FOTOS DE LAS MANGAS DESDE EL NODO A AL B",
+        bold=True,color=BLANCO,bg="00133A",halign="center",merge_to=(4,5))
+    ws3.row_dimensions[4].height = 39
 
-    _m(ws3, 3,2, 3,5)
-    _s(ws3, (3,2), "FOTOS DE LAS MANGAS DESDE EL NODO A AL B", bold=True, size=11, halign="center")
-
-    mangas = datos.get("mangas", [])
-    f3 = 4
+    f3 = 6
+    mangas = datos.get("mangas",[])
     if not mangas:
-        _s(ws3, (f3,2), "SIN CAMBIO DE MANGAS EN ESTE RECORRIDO", size=11, color="808080", italic=True)
+        cel(ws3,f3,2,"SIN CAMBIO DE MANGAS EN ESTE RECORRIDO",color=GRIS_LEY)
     else:
-        for i in range(0, len(mangas), 2):
+        for i in range(0,len(mangas),2):
             m1 = mangas[i]
-            m2 = mangas[i+1] if i+1 < len(mangas) else {}
-            for label, k in [("NOMBRE:", "nombre"), ("DERIVACION:", "derivacion"),
-                              ("COORDENADAS:", "coordenadas"), ("OBSERVACION:", "observacion")]:
+            m2 = mangas[i+1] if i+1<len(mangas) else {}
+            for label,k in [("NOMBRE:","nombre"),("DERIVACION:","derivacion"),
+                             ("COORDENADAS:","coordenadas"),("OBSERVACION:","observacion")]:
                 ws3.row_dimensions[f3].height = 21
-                _s(ws3, (f3,2), label, bold=True, size=11)
-                _s(ws3, (f3,3), m1.get(k,""), size=11)
-                _s(ws3, (f3,4), label, bold=True, size=11)
-                _s(ws3, (f3,5), m2.get(k,""), size=11)
+                cel(ws3,f3,2,label,bold=True,color=BLANCO,bg=AZUL_MANG)
+                cel(ws3,f3,3,m1.get(k,""),color=TEXTO)
+                cel(ws3,f3,4,label,bold=True,color=BLANCO,bg=AZUL_MANG)
+                cel(ws3,f3,5,m2.get(k,""),color=TEXTO)
                 f3 += 1
             ws3.row_dimensions[f3].height = 315
-            ws3.cell(f3, 3, "[FOTO MANGA izquierda]").font = Font(name="Calibri", size=9, color="808080", italic=True)
-            ws3.cell(f3, 5, "[FOTO MANGA derecha]").font = Font(name="Calibri", size=9, color="808080", italic=True)
+            ws3.cell(f3,3).value = "[FOTO MANGA]"
+            ws3.cell(f3,3).font = Font(name="Calibri",size=9,color=GRIS_LEY,italic=True)
+            ws3.cell(f3,5).value = "[FOTO MANGA]"
+            ws3.cell(f3,5).font = Font(name="Calibri",size=9,color=GRIS_LEY,italic=True)
             f3 += 2
 
-    # ══════════════════════════════════════════════════════════════════
-    # HOJA 4: INVENTARIO DE HILOS EN NODO
-    # ══════════════════════════════════════════════════════════════════
+    # ══ HOJA 4: INVENTARIO DE HILOS EN NODO ═════════════════════════
     ws4 = wb.create_sheet("INVENTARIO DE HILOS EN NODO")
     ws4.column_dimensions["A"].width = 9.56
     ws4.column_dimensions["B"].width = 14.11
     ws4.column_dimensions["C"].width = 45.44
     ws4.column_dimensions["D"].width = 9.11
     ws4.column_dimensions["E"].width = 24.67
+    ws4.column_dimensions["F"].width = 23.67
 
     ws4.row_dimensions[2].height = 57
-    _m(ws4, 2,3, 2,6)
-    _s(ws4, (2,3), "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
-       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
-    _s(ws4, (2,7), "Codigo: FOR FO 02\nVersion: 3 (28/05/2021)", bold=True, size=11)
+    cel(ws4,2,3,"REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
+        bold=True,color=BLANCO,bg=AZUL,halign="center",merge_to=(2,6))
+    cel(ws4,2,7,"Codigo: FOR FO 02\nVersion: 3 (28/05/2021)",bold=True)
 
-    _s(ws4, (3,1), "NODO: ", bold=True, size=11)
-    _s(ws4, (3,3), r["nodo_final"], size=11)
-    _s(ws4, (4,1), "NOMBRE ODF DE RUTA:", bold=True, size=11)
-    _s(ws4, (4,3), datos["hilos"].get("posicion_odf",""), size=11)
+    cel(ws4,3,1,"NODO: ",bold=True,color=TEXTO)
+    cel(ws4,3,3,r["nodo_final"],color=TEXTO)
+    cel(ws4,4,1,"NOMBRE ODF DE RUTA:",bold=True,color=TEXTO)
+    cel(ws4,4,3,datos["hilos"].get("posicion_odf",""),color=TEXTO)
 
-    for col, txt in [(2,"PAR"),(3,"HILO"),(4,"NOMENCLATURA"),(5,"RACK #")]:
-        _s(ws4, (6,col), txt, bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
+    ws4.row_dimensions[6].height = 27
+    for col,txt in [(2,"PAR"),(3,"HILO"),(4,"NOMENCLATURA"),(5,"RACK #")]:
+        cel(ws4,6,col,txt,bold=True,color=BLANCO,bg=AZUL_CIU,halign="center")
 
     f4 = 7
-    hilos = datos["hilos"].get("filas", [])
+    hilos = datos["hilos"].get("filas",[])
     if not hilos:
-        _s(ws4, (f4,2), "SIN CAMBIOS EN ODF EN ESTE RECORRIDO", size=11, color="808080", italic=True)
+        cel(ws4,f4,2,"SIN CAMBIOS EN ODF EN ESTE RECORRIDO",color=GRIS_LEY)
     else:
         for h in hilos:
             ws4.row_dimensions[f4].height = 21
-            _s(ws4, (f4,2), h.get("hilo_par",""), size=11)
-            _s(ws4, (f4,4), h.get("descripcion",""), size=11)
-            _s(ws4, (f4,5), h.get("estado",""), size=11)
+            cel(ws4,f4,2,h.get("hilo_par",""),color=TEXTO)
+            cel(ws4,f4,4,h.get("descripcion",""),color=TEXTO)
+            cel(ws4,f4,5,h.get("estado",""),color=TEXTO)
             f4 += 1
 
-    # ══════════════════════════════════════════════════════════════════
-    # HOJA 5: Checklist CIU
-    # ══════════════════════════════════════════════════════════════════
+    # ══ HOJA 5: Checklist CIU ════════════════════════════════════════
     ws5 = wb.create_sheet("Checklist CIU")
     ws5.column_dimensions["A"].width = 8.67
     ws5.column_dimensions["B"].width = 25.67
@@ -435,72 +423,63 @@ def generar_excel(datos):
     ws5.column_dimensions["H"].width = 13.67
 
     ws5.row_dimensions[2].height = 45.75
-    _m(ws5, 2,2, 2,7)
-    _s(ws5, (2,2), "CHECKLIST CUADRILLA INTERURBANA",
-       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
-    _s(ws5, (2,8), "Codigo: FOR FO 05\nVersion: 3 (26/06/2025)", bold=True, size=11)
+    cel(ws5,2,2,"CHECKLIST CUADRILLA INTERURBANA",
+        bold=True,color=BLANCO,bg=AZUL,halign="center",merge_to=(2,7))
+    cel(ws5,2,8,"Codigo: FOR FO 05\nVersion: 3 (26/06/2025)",bold=True)
 
-    # Info cabecera CIU
-    _s(ws5, (3,2), "Fecha del Recorrido", bold=True, size=11)
-    _s(ws5, (3,3), r["fecha"], size=11)
-    _s(ws5, (3,5), "Hora Inicio", bold=True, size=11)
-    _s(ws5, (3,6), r["hora_inicio"], size=11)
-    _s(ws5, (3,7), "Hora Fin", bold=True, size=11)
-    _s(ws5, (3,8), r["hora_fin"], size=11)
+    cel(ws5,3,2,"Fecha del Recorrido",bold=True,color=TEXTO)
+    cel(ws5,3,3,r["fecha"],color=TEXTO)
+    cel(ws5,3,5,"Hora Inicio",bold=True,color=TEXTO)
+    cel(ws5,3,6,r["hora_inicio"],color=TEXTO)
+    cel(ws5,3,7,"Hora Fin",bold=True,color=TEXTO)
+    cel(ws5,3,8,r["hora_fin"],color=TEXTO)
 
     f5 = 4
-    for label, valor in [
-        ("Nombre de Ruta", r["nombre_ruta"]),
-        ("Nodo Inicio", r["nodo_inicial"]),
-        ("Nodo Final", r["nodo_final"]),
-        ("Distancia de la Ruta", ciu.get("distancia_ruta","")),
-        ("Lider de Cuadrilla", r["lider"]),
-        ("Vehiculo Placa", ciu.get("vehiculo_placa","")),
-        ("Coordinador Fibra Optica", r["coordinador"]),
+    for label,valor in [
+        ("Nombre de Ruta",r["nombre_ruta"]),
+        ("Nodo Inicio",r["nodo_inicial"]),
+        ("Nodo Final",r["nodo_final"]),
+        ("Distancia de la Ruta",ciu.get("distancia_ruta","")),
+        ("Lider de Cuadrilla",r["lider"]),
+        ("Vehiculo Placa",ciu.get("vehiculo_placa","")),
+        ("Coordinador Fibra Optica",r["coordinador"]),
     ]:
         ws5.row_dimensions[f5].height = 21
-        _s(ws5, (f5,2), label, bold=True, size=11)
-        _m(ws5, f5,3, f5,8)
-        _s(ws5, (f5,3), valor, size=11)
+        cel(ws5,f5,2,label,bold=True,color=TEXTO)
+        cel(ws5,f5,3,valor,color=TEXTO,merge_to=(f5,8))
         f5 += 1
 
-    # Secciones herramientas
-    ciu_herr = ciu.get("herramientas", {})
-    ciu_equi = ciu.get("equipos", {})
-    ciu_mate = ciu.get("materiales", {})
+    ciu_h = ciu.get("herramientas",{})
+    ciu_e = ciu.get("equipos",{})
+    ciu_m = ciu.get("materiales",{})
 
-    for seccion_nombre, items, data_sec in [
-        ("HERRAMIENTAS Y EPP", HERRAMIENTAS_EPP, ciu_herr),
-        ("EQUIPOS ELECTRONICOS", EQUIPOS_ELECTRONICOS, ciu_equi),
-        ("MATERIALES E INSUMOS", MATERIALES_INSUMOS, ciu_mate),
+    for sec_nom,items,data_s in [
+        ("HERRAMIENTAS Y EPP",HERRAMIENTAS_EPP,ciu_h),
+        ("EQUIPOS ELECTRONICOS",EQUIPOS_ELECTRONICOS,ciu_e),
+        ("MATERIALES E INSUMOS",MATERIALES_INSUMOS,ciu_m),
     ]:
         ws5.row_dimensions[f5].height = 21
-        _m(ws5, f5,2, f5,3)
-        _s(ws5, (f5,2), seccion_nombre, bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
-        _s(ws5, (f5,4), "CANTIDAD", bold=True, size=11, bg="0070C0", halign="center", color="FFFFFF")
-        _s(ws5, (f5,5), "OBSERVACIONES", bold=True, size=11, bg="0070C0", halign="center", color="FFFFFF")
+        cel(ws5,f5,2,sec_nom,bold=True,color=BLANCO,bg=AZUL_CIU,halign="center",merge_to=(f5,3))
+        cel(ws5,f5,4,"CANTIDAD",bold=True,color=BLANCO,bg=AZUL_CIU,halign="center")
+        cel(ws5,f5,5,"OBSERVACIONES",bold=True,color=BLANCO,bg=AZUL_CIU,halign="center",merge_to=(f5,8))
         f5 += 1
-
         for nombre in items:
             ws5.row_dimensions[f5].height = 21
-            _s(ws5, (f5,2), nombre, size=11)
-            info = data_sec.get(nombre, {})
-            cantidad = info.get("cantidad", 0)
-            obs = info.get("obs", "NINGUNA")
-            _s(ws5, (f5,4), cantidad, size=11, halign="center")
-            color_obs = "00B050" if obs == "BUEN ESTADO" else ("FF0000" if obs == "MAL ESTADO" else "808080")
-            _s(ws5, (f5,5), obs, size=11, color="FFFFFF", bg=color_obs, halign="center")
+            cel(ws5,f5,2,nombre,color=TEXTO)
+            info = data_s.get(nombre,{})
+            cant = info.get("cantidad",0)
+            obs  = info.get("obs","NINGUNA")
+            cel(ws5,f5,4,cant,color=TEXTO,halign="center")
+            bg_obs = VERDE if obs=="BUEN ESTADO" else (ROJO if obs=="MAL ESTADO" else GRIS_LEY)
+            cel(ws5,f5,5,obs,color=BLANCO,bg=bg_obs,halign="center",merge_to=(f5,8))
             f5 += 1
 
-    # Leyenda
     f5 += 1
-    for txt, bg in [("BUEN ESTADO","00B050"),("MAL ESTADO","FF0000"),("NINGUNA","808080")]:
-        _s(ws5, (f5,2), txt, bold=True, size=11, color="FFFFFF", bg=bg, halign="center")
+    for txt,bg in [("BUEN ESTADO",VERDE),("MAL ESTADO",ROJO),("NINGUNA",GRIS_LEY)]:
+        cel(ws5,f5,2,txt,bold=True,color=BLANCO,bg=bg,halign="center")
         f5 += 1
 
-    # ══════════════════════════════════════════════════════════════════
-    # HOJA 6: Checklists MPRIU
-    # ══════════════════════════════════════════════════════════════════
+    # ══ HOJA 6: Checklists MPRIU ════════════════════════════════════
     ws6 = wb.create_sheet("Checklists MPRIU")
     ws6.column_dimensions["A"].width = 8.67
     ws6.column_dimensions["B"].width = 25.67
@@ -512,69 +491,56 @@ def generar_excel(datos):
     ws6.column_dimensions["H"].width = 13.67
 
     ws6.row_dimensions[2].height = 45.75
-    _m(ws6, 2,2, 2,7)
-    _s(ws6, (2,2), "CHECKLIST DE RECORRIDO DE MANTENIMIENTO PREVENTIVO DE RUTAS INTERURBANAS",
-       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
-    _s(ws6, (2,8), "Codigo: FOR FO 08\nVersion: 02 (28/05/2021)", bold=True, size=11)
+    cel(ws6,2,2,"CHECKLIST DE RECORRIDO DE MANTENIMIENTO PREVENTIVO DE RUTAS INTERURBANAS",
+        bold=True,color=BLANCO,bg=AZUL,halign="center",merge_to=(2,7))
+    cel(ws6,2,8,"Codigo: FOR FO 08\nVersion: 02 (28/05/2021)",bold=True)
 
-    _s(ws6, (3,2), "Fecha del Recorrido", bold=True, size=11)
-    _s(ws6, (3,3), r["fecha"], size=11)
-    _s(ws6, (3,5), "Hora Inicio", bold=True, size=11)
-    _s(ws6, (3,6), r["hora_inicio"], size=11)
-    _s(ws6, (3,7), "Hora Fin", bold=True, size=11)
-    _s(ws6, (3,8), r["hora_fin"], size=11)
+    cel(ws6,3,2,"Fecha del Recorrido",bold=True,color=TEXTO)
+    cel(ws6,3,3,r["fecha"],color=TEXTO)
+    cel(ws6,3,5,"Hora Inicio",bold=True,color=TEXTO)
+    cel(ws6,3,6,r["hora_inicio"],color=TEXTO)
+    cel(ws6,3,7,"Hora Fin",bold=True,color=TEXTO)
+    cel(ws6,3,8,r["hora_fin"],color=TEXTO)
 
     f6 = 4
-    for label, valor in [
-        ("Nombre de Ruta", r["nombre_ruta"]),
-        ("Nodo Inicio", r["nodo_inicial"]),
-        ("Nodo Final", r["nodo_final"]),
-        ("Distancia de la Ruta", ciu.get("distancia_ruta","")),
-        ("Lider de Cuadrilla", r["lider"]),
-        ("Vehiculo Placa", ciu.get("vehiculo_placa","")),
-        ("Coordinador Fibra Optica", r["coordinador"]),
+    for label,valor in [
+        ("Nombre de Ruta",r["nombre_ruta"]),
+        ("Nodo Inicio",r["nodo_inicial"]),
+        ("Nodo Final",r["nodo_final"]),
+        ("Distancia de la Ruta",ciu.get("distancia_ruta","")),
+        ("Lider de Cuadrilla",r["lider"]),
+        ("Vehiculo Placa",ciu.get("vehiculo_placa","")),
+        ("Coordinador Fibra Optica",r["coordinador"]),
     ]:
         ws6.row_dimensions[f6].height = 30
-        _s(ws6, (f6,2), label, bold=True, size=11)
-        _m(ws6, f6,3, f6,8)
-        _s(ws6, (f6,3), valor, size=11)
+        cel(ws6,f6,2,label,bold=True,color=TEXTO)
+        cel(ws6,f6,3,valor,color=TEXTO,merge_to=(f6,8))
         f6 += 1
 
-    # Header tabla novedades
     ws6.row_dimensions[f6].height = 30
-    _s(ws6, (f6,2), "NOVEDAD", bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
-    _s(ws6, (f6,3), "CHECK", bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
-    _m(ws6, f6,4, f6,7)
-    _s(ws6, (f6,4), "SOLUCION", bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
-    _s(ws6, (f6,8), "CANTIDAD", bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
+    cel(ws6,f6,2,"NOVEDAD",bold=True,color=BLANCO,bg=AZUL_CIU,halign="center")
+    cel(ws6,f6,3,"CHECK",bold=True,color=BLANCO,bg=AZUL_CIU,halign="center")
+    cel(ws6,f6,4,"SOLUCION",bold=True,color=BLANCO,bg=AZUL_CIU,halign="center",merge_to=(f6,7))
+    cel(ws6,f6,8,"CANTIDAD",bold=True,color=BLANCO,bg=AZUL_CIU,halign="center")
     f6 += 1
 
     for novedad in NOVEDADES_MPRIU:
         ws6.row_dimensions[f6].height = 43.5
-        info = novedades_check.get(novedad, {})
-        tiene = info.get("check", False)
-        cantidad = info.get("cantidad", 0)
-        check_str = "SI" if tiene else "NO"
-        solucion = SOLUCIONES_MPRIU.get(novedad, "")
-
-        _s(ws6, (f6,2), novedad, size=11)
-        c_chk = ws6.cell(f6, 3)
-        c_chk.value = check_str
-        c_chk.font = Font(bold=True, name="Calibri", size=11, color="FFFFFF")
-        from openpyxl.styles import Alignment as Al
-        c_chk.alignment = Al(horizontal="center", vertical="center")
-        c_chk.fill = PatternFill("solid", fgColor="00B050" if tiene else "FF0000")
-
-        _m(ws6, f6,4, f6,7)
-        _s(ws6, (f6,4), solucion, size=11)
-        _s(ws6, (f6,8), cantidad if tiene else 0, size=11, halign="center")
+        info = nch.get(novedad,{})
+        tiene = info.get("check",False)
+        cant  = info.get("cantidad",0)
+        chk   = "SI" if tiene else "NO"
+        sol   = SOLUCIONES_MPRIU.get(novedad,"")
+        cel(ws6,f6,2,novedad,color=TEXTO)
+        bg_chk = VERDE if tiene else ROJO
+        cel(ws6,f6,3,chk,bold=True,color=BLANCO,bg=bg_chk,halign="center")
+        cel(ws6,f6,4,sol,color=TEXTO,merge_to=(f6,7))
+        cel(ws6,f6,8,cant if tiene else 0,color=TEXTO,halign="center")
         f6 += 1
 
-    # Observaciones
     ws6.row_dimensions[f6].height = 60
-    _s(ws6, (f6,2), "Observaciones:", bold=True, size=11)
-    _m(ws6, f6,3, f6,8)
-    _s(ws6, (f6,3), r["observaciones"], size=11)
+    cel(ws6,f6,2,"Observaciones:",bold=True,color=TEXTO)
+    cel(ws6,f6,3,r["observaciones"],color=TEXTO,merge_to=(f6,8))
 
     buf = io.BytesIO()
     wb.save(buf)
