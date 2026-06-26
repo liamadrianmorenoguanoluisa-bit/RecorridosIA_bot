@@ -162,383 +162,425 @@ SOLUCIONES_MPRIU = {
     "NO SE REGISTRAN NOVEDADES DURANTE LA INSPECCION.": "NO SE ENCUENTRAN NOVEDADES QUE SIGNIFIQUEN RIESGOS EN EL CABLE DE LA RED INTERURBANO.",
 }
 
-def _estilo_header(ws, fila, col, texto, fg="1F4E79"):
-    c = ws.cell(fila, col, texto)
-    c.font = Font(bold=True, color="FFFFFF", name="Arial", size=9)
-    c.fill = PatternFill("solid", fgColor=fg)
-    c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+HERRAMIENTAS_EPP = [
+    "Cinturon y Linea de Vida", "Casco", "Escalera de 24 pies", "Escalera de 28 pies",
+    "Escalera de 32 pies", "Conos reflectivos", "Caja para herramientas",
+    "Juego de destornilladores", "Martillo mediano", "Estiletes", "Cortafrio",
+    "Alicate", "Llave francesa", "Juego de rachet", "Pares de guantes aislantes",
+    "Tecle", "Machete", "Cizalla", "Pata de cabra", "Flejadora (Maquina Eriband)",
+    "Extension con foco", "Motosierra", "Tijeras metalicas", "Arco de sierra",
+    "Binoculares", "Parasol", "Remolque / Carrete para F.O.",
+]
+EQUIPOS_ELECTRONICOS = [
+    "Fusionadora", "Cortadora de fibra", "Bobina de lanzamiento",
+    "OTDR con cargador", "Llave Acsys", "GPS", "Inversor", "Etiquetadora",
+]
+MATERIALES_INSUMOS = [
+    "Fibra 48h (500mt)", "Mangas de 48h y/o 144h (2 minimo)",
+    "Rollo de cinta Eriband 3/4", "Hebillas para cinta Eriband 3/4",
+    "Hojas de sierra", "Patchcord de fibra", "Adaptadores (Simplex-Duplex)",
+    "Paquetes de amarras", "Mesas plasticas", "Sillas plasticas",
+    "Cuchillos", "Poleas", "Sogas de nylon medianas", "Sogas de nylon gruesas",
+    "Repelente contra insectos", "Repelente contra abejas y avispas",
+]
+
+# ─── helpers de estilo ────────────────────────────────────────────────────────
+def _s(ws, coord, valor, bold=False, size=11, color="000000", bg=None, halign="left", wrap=True, italic=False):
+    from openpyxl.styles import Alignment
+    c = ws[coord] if isinstance(coord, str) else ws.cell(coord[0], coord[1])
+    c.value = valor
+    c.font = Font(bold=bold, size=size, color=color, name="Calibri", italic=italic)
+    if bg:
+        c.fill = PatternFill("solid", fgColor=bg)
+    c.alignment = Alignment(horizontal=halign, vertical="center", wrap_text=wrap)
     return c
 
-def _estilo_label(ws, fila, col, texto):
-    c = ws.cell(fila, col, texto)
-    c.font = Font(bold=True, name="Arial", size=9)
-    c.alignment = Alignment(wrap_text=True, vertical="center")
-    return c
-
-def _estilo_valor(ws, fila, col, texto):
-    c = ws.cell(fila, col, texto)
-    c.font = Font(name="Arial", size=9)
-    c.alignment = Alignment(wrap_text=True, vertical="center")
-    return c
+def _m(ws, r1, c1, r2, c2):
+    ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
 
 def generar_excel(datos):
     from openpyxl.styles import Alignment, Border, Side
-    from openpyxl.utils import get_column_letter
-
     wb = Workbook()
-    r  = datos["recorrido"]
+    r = datos["recorrido"]
+    ciu = datos["ciu"]
+    novedades_check = datos["mpriu"].get("novedades_check", {})
 
-    borde = Border(
-        left=Side(style="thin"), right=Side(style="thin"),
-        top=Side(style="thin"), bottom=Side(style="thin")
-    )
+    thin = Side(style="thin")
+    borde = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════
     # HOJA 1: REPORTES_DE_RECORRIDOS
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════
     ws1 = wb.active
     ws1.title = "REPORTES_DE_RECORRIDOS"
-    ws1.column_dimensions["A"].width = 50
-    ws1.column_dimensions["B"].width = 20
-    ws1.column_dimensions["C"].width = 20
-    ws1.column_dimensions["D"].width = 20
+    ws1.column_dimensions["A"].width = 41
+    ws1.column_dimensions["B"].width = 35
+    ws1.column_dimensions["C"].width = 32
+    ws1.column_dimensions["D"].width = 30
 
-    # Titulo principal
-    ws1.merge_cells("A1:D1")
-    c = ws1["A1"]
-    c.value = "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS"
-    c.font = Font(bold=True, color="FFFFFF", name="Arial", size=10)
-    c.fill = PatternFill("solid", fgColor="1F4E79")
-    c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    ws1.row_dimensions[1].height = 30
+    # Fila 2 — titulo + codigo
+    ws1.row_dimensions[2].height = 57
+    _m(ws1, 2,2, 2,3)
+    _s(ws1, (2,2), "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
+       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
+    _s(ws1, (2,4), "Codigo: FOR FO 02\nVersion: 3 (28/05/2021)", bold=True, size=11)
 
-    ws1.merge_cells("A2:D2")
-    ws1["A2"].value = "Codigo: FOR FO 02 Version: 3 (28/05/2021)"
-    ws1["A2"].font = Font(bold=True, name="Arial", size=9)
-    ws1["A2"].alignment = Alignment(horizontal="right")
+    # Fila 4 — subtitulo azul
+    ws1.row_dimensions[4].height = 24
+    _m(ws1, 4,1, 4,4)
+    _s(ws1, (4,1), "REPORTE DE RECORRIDO DE RUTAS INTERURBANAS DE F. O.",
+       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
 
-    # Subtitulo
-    ws1.merge_cells("A3:D3")
-    ws1["A3"].value = "REPORTE DE RECORRIDO DE RUTAS INTERURBANAS DE F. O."
-    ws1["A3"].font = Font(bold=True, color="FFFFFF", name="Arial", size=10)
-    ws1["A3"].fill = PatternFill("solid", fgColor="2E75B6")
-    ws1["A3"].alignment = Alignment(horizontal="center", vertical="center")
+    # Fila 5 — fecha/hora labels
+    ws1.row_dimensions[5].height = 38
+    _m(ws1, 5,1, 6,1)
+    _s(ws1, (5,1), "FECHA Y HORA DEL RECORRIDO", bold=True, size=11, bg="969696", halign="center")
+    _s(ws1, (5,2), "FECHA", bold=True, size=11)
+    _s(ws1, (5,3), "HORA INICIO", bold=True, size=11)
+    _s(ws1, (5,4), "HORA FIN", bold=True, size=11)
 
-    # Fecha y hora
-    _estilo_label(ws1, 4, 1, "FECHA Y HORA DEL RECORRIDO")
-    _estilo_label(ws1, 4, 2, "FECHA")
-    _estilo_label(ws1, 4, 3, "HORA INICIO")
-    _estilo_label(ws1, 4, 4, "HORA FIN")
-    _estilo_valor(ws1, 5, 2, r["fecha"])
-    _estilo_valor(ws1, 5, 3, r["hora_inicio"])
-    _estilo_valor(ws1, 5, 4, r["hora_fin"])
+    # Fila 6 — fecha/hora valores
+    ws1.row_dimensions[6].height = 38
+    _s(ws1, (6,2), r["fecha"], size=11)
+    _s(ws1, (6,3), r["hora_inicio"], size=11)
+    _s(ws1, (6,4), r["hora_fin"], size=11)
 
-    # Datos principales
-    datos_principales = [
+    # Filas 7-9 — datos cabecera
+    for i, (label, valor) in enumerate([
         ("NOMBRE DE LA RUTA", r["nombre_ruta"]),
         ("CODIGO DE CUADRILLA", r["codigo_cuadrilla"]),
         ("NODO INICIAL", r["nodo_inicial"]),
-    ]
-    fila = 6
-    for label, valor in datos_principales:
-        ws1.merge_cells(f"A{fila}:A{fila}")
-        _estilo_label(ws1, fila, 1, label)
-        ws1.merge_cells(f"B{fila}:D{fila}")
-        _estilo_valor(ws1, fila, 2, valor)
-        fila += 1
+    ]):
+        f = 7 + i
+        ws1.row_dimensions[f].height = 38
+        _s(ws1, (f,1), label, bold=True, size=11, bg="D9D9D9")
+        _m(ws1, f,2, f,4)
+        _s(ws1, (f,2), valor, bold=True, size=11)
 
-    # Novedades
+    # Novedades — cada una ocupa 6 filas
+    fila = 10
     for nov in r["novedades"]:
-        num = nov.get("numero", "")
-        ws1.merge_cells(f"A{fila}:D{fila}")
-        c = ws1.cell(fila, 1, "FECHA Y HORA NOVEDAD # " + str(num))
-        c.font = Font(bold=True, color="FFFFFF", name="Arial", size=9)
-        c.fill = PatternFill("solid", fgColor="2E75B6")
-        c.alignment = Alignment(horizontal="center")
+        num = str(nov.get("numero", ""))
+        # Header novedad (gris)
+        ws1.row_dimensions[fila].height = 38
+        _m(ws1, fila,1, fila+1,1)
+        _s(ws1, (fila,1), "FECHA Y HORA NOVEDAD # " + num, bold=True, size=11, bg="969696", halign="center")
+        _s(ws1, (fila,2), "FECHA", bold=True, size=11)
+        _s(ws1, (fila,3), "HORA INICIO", bold=True, size=11)
+        _s(ws1, (fila,4), "HORA FIN", bold=True, size=11)
         fila += 1
 
-        _estilo_label(ws1, fila, 2, "FECHA")
-        _estilo_label(ws1, fila, 3, "HORA INICIO")
-        _estilo_label(ws1, fila, 4, "HORA FIN")
-        fila += 1
-        _estilo_valor(ws1, fila, 2, nov.get("fecha",""))
-        _estilo_valor(ws1, fila, 3, nov.get("hora_inicio",""))
-        _estilo_valor(ws1, fila, 4, nov.get("hora_fin",""))
+        # Valores fecha/hora
+        ws1.row_dimensions[fila].height = 38
+        _s(ws1, (fila,2), nov.get("fecha",""), size=11)
+        _s(ws1, (fila,3), nov.get("hora_inicio",""), size=11)
+        _s(ws1, (fila,4), nov.get("hora_fin",""), size=11)
         fila += 1
 
+        # Campos de novedad
         for label, key in [
             ("MOTIVO APARENTE DE LA NOVEDAD", "motivo"),
             ("REMEDIO DEFINITIVO A LA NOVEDAD", "remedio"),
             ("TAREA PENDIENTE (por regulatorio/obra civil, contratista)", "tarea_pendiente"),
             ("COORDENADAS SITIO DE LA NOVEDAD (Grados decimales)", "coordenadas"),
         ]:
-            ws1.merge_cells(f"A{fila}:A{fila}")
-            _estilo_label(ws1, fila, 1, label)
-            ws1.merge_cells(f"B{fila}:D{fila}")
-            _estilo_valor(ws1, fila, 2, nov.get(key,""))
+            ws1.row_dimensions[fila].height = 42
+            _s(ws1, (fila,1), label, bold=True, size=11, bg="C0C0C0")
+            _m(ws1, fila,2, fila,4)
+            _s(ws1, (fila,2), nov.get(key,""), size=11)
             fila += 1
 
     # Pie del reporte
-    pie = [
-        ("NODO FINAL", r["nodo_final"]),
-        ("LIDER DE CUADRILLA QUE ELABORA INFORME", r["lider"]),
-        ("AYUDANTE TECNICO", r["ayudante"]),
-        ("COORDINADOR FIBRA OPTICA", r["coordinador"]),
-        ("FOTOS ANEXAS AL REPORTE (INDIQUE CUANTAS)", str(r["fotos_total"])),
-        ("OBSERVACIONES GENERALES", r["observaciones"]),
-    ]
-    for label, valor in pie:
-        _estilo_label(ws1, fila, 1, label)
-        ws1.merge_cells(f"B{fila}:D{fila}")
-        _estilo_valor(ws1, fila, 2, valor)
+    for label, bg, valor in [
+        ("NODO FINAL", "D9D9D9", r["nodo_final"]),
+        ("LIDER DE CUADRILLA QUE ELABORA INFORME", "D9D9D9", r["lider"]),
+        ("AYUDANTE TECNICO", "D9D9D9", r["ayudante"]),
+        ("COORDINADOR FIBRA OPTICA", "D9D9D9", r["coordinador"]),
+        ("FOTOS ANEXAS AL REPORTE", "D9D9D9", str(r["fotos_total"])),
+        ("OBSERVACIONES GENERALES", "D9D9D9", r["observaciones"]),
+    ]:
+        ws1.row_dimensions[fila].height = 38
+        _s(ws1, (fila,1), label, bold=True, size=11, bg=bg)
+        _m(ws1, fila,2, fila,4)
+        _s(ws1, (fila,2), valor, size=11)
         fila += 1
 
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════
     # HOJA 2: FOTOS_ANEXAS_AL_REPORTE
-    # ══════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════
     ws2 = wb.create_sheet("FOTOS_ANEXAS_AL_REPORTE")
-    ws2.column_dimensions["B"].width = 25
-    ws2.column_dimensions["C"].width = 25
-    ws2.column_dimensions["D"].width = 25
+    ws2.column_dimensions["A"].width = 2.67
+    ws2.column_dimensions["B"].width = 19.67
+    ws2.column_dimensions["C"].width = 58.78
+    ws2.column_dimensions["D"].width = 23.78
+    ws2.column_dimensions["E"].width = 35.77
 
-    ws2.merge_cells("B1:D1")
-    ws2["B1"].value = "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS"
-    ws2["B1"].font = Font(bold=True, color="FFFFFF", name="Arial")
-    ws2["B1"].fill = PatternFill("solid", fgColor="1F4E79")
-    ws2["B1"].alignment = Alignment(horizontal="center")
+    ws2.row_dimensions[2].height = 57
+    _m(ws2, 2,3, 2,4)
+    _s(ws2, (2,3), "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
+       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
+    _s(ws2, (2,5), "Codigo: FOR FO 02\nVersion: 3 (28/05/2021)", bold=True, size=11)
 
-    ws2.merge_cells("B2:D2")
-    ws2["B2"].value = "FOTOS DE LAS ACCIONES CORRECTIVAS"
-    ws2["B2"].font = Font(bold=True, name="Arial")
-    ws2["B2"].alignment = Alignment(horizontal="center")
+    _s(ws2, (3,2), "FOTOS DE LAS ACCIONES CORRECTIVAS", bold=True, size=11, halign="center")
+    _s(ws2, (4,2), "NODO INICIO RECORRIDO", bold=True, size=11)
+    _s(ws2, (4,3), "FOTO", bold=True, size=11, halign="center")
+    _s(ws2, (4,4), "NOMBRE DEL NODO", bold=True, size=11)
+    _s(ws2, (5,4), r["nodo_inicial"], size=11)
 
-    # Nodo inicio
-    ws2["B3"].value = "NODO INICIO RECORRIDO"
-    ws2["C3"].value = "FOTO"
-    ws2["D3"].value = r["nodo_inicial"]
-    ws2["B3"].font = Font(bold=True, name="Arial", size=9)
-
-    fila2 = 4
+    f2 = 6
     for nov in r["novedades"]:
-        num = nov.get("numero","")
-        ws2.merge_cells(f"B{fila2}:D{fila2}")
-        c = ws2.cell(fila2, 2, "NOVEDAD # " + str(num))
-        c.font = Font(bold=True, color="FFFFFF", name="Arial", size=9)
-        c.fill = PatternFill("solid", fgColor="2E75B6")
-        c.alignment = Alignment(horizontal="center")
-        fila2 += 1
+        num = str(nov.get("numero",""))
+        _m(ws2, f2,2, f2,4)
+        _s(ws2, (f2,2), "NOVEDAD # " + num, bold=True, size=11, bg="969696", halign="center")
+        f2 += 1
+        _s(ws2, (f2,2), "ANTES DEL MANTENIMIENTO", bold=True, size=11, halign="center")
+        _s(ws2, (f2,4), "DESPUES DEL MANTENIMIENTO", bold=True, size=11, halign="center")
+        f2 += 1
+        ws2.row_dimensions[f2].height = 315
+        ws2.cell(f2, 3, "[FOTO ANTES - adjuntar manualmente]").font = Font(name="Calibri", size=9, color="808080", italic=True)
+        ws2.cell(f2, 5, "[FOTO DESPUES - adjuntar manualmente]").font = Font(name="Calibri", size=9, color="808080", italic=True)
+        f2 += 1
 
-        ws2.cell(fila2, 2, "ANTES DEL MANTENIMIENTO").font = Font(bold=True, name="Arial", size=9)
-        ws2.cell(fila2, 4, "DESPUES DEL MANTENIMIENTO").font = Font(bold=True, name="Arial", size=9)
-        fila2 += 1
+    _s(ws2, (f2,2), "NODO FINAL DEL RECORRIDO", bold=True, size=11)
+    _s(ws2, (f2,3), "FOTO", bold=True, size=11, halign="center")
+    _s(ws2, (f2,4), r["nodo_final"], size=11)
 
-        ws2.row_dimensions[fila2].height = 90
-        ws2.cell(fila2, 2, "[FOTO ANTES]").font = Font(name="Arial", size=9, color="808080")
-        ws2.cell(fila2, 4, "[FOTO DESPUES]").font = Font(name="Arial", size=9, color="808080")
-        fila2 += 2
+    # ══════════════════════════════════════════════════════════════════
+    # HOJA 3: MANGAS
+    # ══════════════════════════════════════════════════════════════════
+    ws3 = wb.create_sheet("MANGAS")
+    ws3.column_dimensions["A"].width = 2.67
+    ws3.column_dimensions["B"].width = 24.78
+    ws3.column_dimensions["C"].width = 34.78
+    ws3.column_dimensions["D"].width = 24.78
+    ws3.column_dimensions["E"].width = 34.78
 
-    ws2.cell(fila2, 2, "NODO FINAL DEL RECORRIDO").font = Font(bold=True, name="Arial", size=9)
-    ws2.cell(fila2, 3, "FOTO").font = Font(bold=True, name="Arial", size=9)
-    ws2.cell(fila2, 4, r["nodo_final"]).font = Font(name="Arial", size=9)
+    ws3.row_dimensions[2].height = 57
+    _m(ws3, 2,3, 2,4)
+    _s(ws3, (2,3), "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
+       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
+    _s(ws3, (2,5), "Codigo: FOR FO 02\nVersion: 3 (28/05/2021)", bold=True, size=11)
 
-    # ══════════════════════════════════════════════════════
-    # HOJA 3: Checklist CIU
-    # ══════════════════════════════════════════════════════
-    ws_ciu = wb.create_sheet("Checklist CIU")
-    ws_ciu.column_dimensions["B"].width = 40
-    ws_ciu.column_dimensions["C"].width = 12
-    ws_ciu.column_dimensions["D"].width = 20
+    _m(ws3, 3,2, 3,5)
+    _s(ws3, (3,2), "FOTOS DE LAS MANGAS DESDE EL NODO A AL B", bold=True, size=11, halign="center")
 
-    ws_ciu.merge_cells("B1:D1")
-    ws_ciu["B1"].value = "CHECKLIST CUADRILLA INTERURBANA - Codigo: FOR FO 05"
-    ws_ciu["B1"].font = Font(bold=True, color="FFFFFF", name="Arial")
-    ws_ciu["B1"].fill = PatternFill("solid", fgColor="1F4E79")
-    ws_ciu["B1"].alignment = Alignment(horizontal="center")
-
-    datos_ciu = [
-        ("Fecha del Recorrido", r["fecha"], "Hora Inicio", r["hora_inicio"], "Hora Fin", r["hora_fin"]),
-    ]
-    ws_ciu["B2"].value = "Fecha del Recorrido"
-    ws_ciu["C2"].value = r["fecha"]
-    ws_ciu["D2"].value = "Hora Inicio: " + r["hora_inicio"] + "  Hora Fin: " + r["hora_fin"]
-
-    info_ciu = [
-        ("Nombre de Ruta", r["nombre_ruta"]),
-        ("Nodo Inicio", r["nodo_inicial"]),
-        ("Nodo Final", r["nodo_final"]),
-        ("Distancia de la Ruta", datos["ciu"].get("distancia_ruta","")),
-        ("Lider de Cuadrilla", r["lider"]),
-        ("Vehiculo Placa", datos["ciu"].get("vehiculo_placa","")),
-        ("Coordinador Fibra Optica", r["coordinador"]),
-    ]
-    fila_c = 3
-    for label, valor in info_ciu:
-        ws_ciu.cell(fila_c, 2, label).font = Font(bold=True, name="Arial", size=9)
-        ws_ciu.merge_cells(f"C{fila_c}:D{fila_c}")
-        ws_ciu.cell(fila_c, 3, valor).font = Font(name="Arial", size=9)
-        fila_c += 1
-
-    ws_ciu.cell(fila_c, 2, "HERRAMIENTAS Y EPP").font = Font(bold=True, color="FFFFFF", name="Arial", size=9)
-    ws_ciu.cell(fila_c, 2).fill = PatternFill("solid", fgColor="2E75B6")
-    ws_ciu.cell(fila_c, 3, "CANTIDAD").font = Font(bold=True, name="Arial", size=9)
-    ws_ciu.cell(fila_c, 4, "OBSERVACIONES").font = Font(bold=True, name="Arial", size=9)
-    fila_c += 1
-
-    herramientas = [
-        "Cinturon y Linea de Vida", "Casco", "Escalera de 24 pies", "Escalera de 28 pies",
-        "Escalera de 32 pies", "Conos reflectivos", "Juego de destornilladores",
-        "Martillo mediano", "Estiletes", "Cortafrio", "Alicate", "Llave francesa",
-        "Juego de rachet", "Pares de guantes aislantes", "Tecle", "Machete", "Cizalla",
-        "Fusionadora", "Cortadora de fibra", "OTDR con cargador", "Llave Acsys",
-        "Inversor", "Etiquetadora",
-    ]
-    for h in herramientas:
-        ws_ciu.cell(fila_c, 2, h).font = Font(name="Arial", size=9)
-        ws_ciu.cell(fila_c, 3, 0).font = Font(name="Arial", size=9)
-        ws_ciu.cell(fila_c, 4, "NINGUNA").font = Font(name="Arial", size=9)
-        fila_c += 1
-
-    # ══════════════════════════════════════════════════════
-    # HOJA 4: Checklists MPRIU
-    # ══════════════════════════════════════════════════════
-    ws_mp = wb.create_sheet("Checklists MPRIU")
-    ws_mp.column_dimensions["B"].width = 45
-    ws_mp.column_dimensions["C"].width = 8
-    ws_mp.column_dimensions["D"].width = 60
-    ws_mp.column_dimensions["E"].width = 12
-
-    ws_mp.merge_cells("B1:E1")
-    ws_mp["B1"].value = "CHECKLIST DE RECORRIDO DE MANTENIMIENTO PREVENTIVO DE RUTAS INTERURBANAS - Codigo: FOR FO 08"
-    ws_mp["B1"].font = Font(bold=True, color="FFFFFF", name="Arial")
-    ws_mp["B1"].fill = PatternFill("solid", fgColor="1F4E79")
-    ws_mp["B1"].alignment = Alignment(horizontal="center", wrap_text=True)
-
-    info_mp = [
-        ("Fecha del Recorrido", r["fecha"] + "  Hora Inicio: " + r["hora_inicio"] + "  Hora Fin: " + r["hora_fin"]),
-        ("Nombre de Ruta", r["nombre_ruta"]),
-        ("Nodo Inicio", r["nodo_inicial"]),
-        ("Nodo Final", r["nodo_final"]),
-        ("Distancia de la Ruta", datos["ciu"].get("distancia_ruta","")),
-        ("Lider de Cuadrilla", r["lider"]),
-        ("Vehiculo Placa", datos["ciu"].get("vehiculo_placa","")),
-        ("Coordinador Fibra Optica", r["coordinador"]),
-    ]
-    fila_m = 2
-    for label, valor in info_mp:
-        ws_mp.cell(fila_m, 2, label).font = Font(bold=True, name="Arial", size=9)
-        ws_mp.merge_cells(f"C{fila_m}:E{fila_m}")
-        ws_mp.cell(fila_m, 3, valor).font = Font(name="Arial", size=9)
-        fila_m += 1
-
-    # Encabezados tabla novedades
-    for col, texto in [(2,"NOVEDAD"),(3,"CHECK"),(4,"SOLUCION"),(5,"CANTIDAD")]:
-        c = ws_mp.cell(fila_m, col, texto)
-        c.font = Font(bold=True, color="FFFFFF", name="Arial", size=9)
-        c.fill = PatternFill("solid", fgColor="2E75B6")
-        c.alignment = Alignment(horizontal="center")
-    fila_m += 1
-
-    novedades_check = datos["mpriu"].get("novedades_check", {})
-    for novedad in NOVEDADES_MPRIU:
-        check_info = novedades_check.get(novedad, {})
-        tiene = check_info.get("check", False)
-        cantidad = check_info.get("cantidad", 0)
-        check_str = "SI" if tiene else "NO"
-        solucion = SOLUCIONES_MPRIU.get(novedad, "")
-
-        c_nov = ws_mp.cell(fila_m, 2, novedad)
-        c_nov.font = Font(name="Arial", size=9)
-        c_nov.alignment = Alignment(wrap_text=True)
-
-        c_chk = ws_mp.cell(fila_m, 3, check_str)
-        c_chk.font = Font(bold=True, name="Arial", size=9, color="FF0000" if tiene else "000000")
-        c_chk.alignment = Alignment(horizontal="center")
-
-        c_sol = ws_mp.cell(fila_m, 4, solucion)
-        c_sol.font = Font(name="Arial", size=9)
-        c_sol.alignment = Alignment(wrap_text=True)
-
-        c_cant = ws_mp.cell(fila_m, 5, cantidad)
-        c_cant.font = Font(name="Arial", size=9)
-        c_cant.alignment = Alignment(horizontal="center")
-
-        ws_mp.row_dimensions[fila_m].height = 30
-        fila_m += 1
-
-    ws_mp.cell(fila_m, 2, "Observaciones:").font = Font(bold=True, name="Arial", size=9)
-    ws_mp.merge_cells(f"C{fila_m}:E{fila_m}")
-    ws_mp.cell(fila_m, 3, r["observaciones"]).font = Font(name="Arial", size=9)
-
-    # ══════════════════════════════════════════════════════
-    # HOJA 5: MANGAS (solo si hay)
-    # ══════════════════════════════════════════════════════
-    if datos.get("mangas"):
-        ws_mg = wb.create_sheet("MANGAS")
-        ws_mg.column_dimensions["B"].width = 30
-        ws_mg.column_dimensions["C"].width = 20
-        ws_mg.column_dimensions["D"].width = 30
-        ws_mg.column_dimensions["E"].width = 20
-
-        ws_mg.merge_cells("B1:E1")
-        ws_mg["B1"].value = "FOTOS DE LAS MANGAS DESDE EL NODO A AL B"
-        ws_mg["B1"].font = Font(bold=True, color="FFFFFF", name="Arial")
-        ws_mg["B1"].fill = PatternFill("solid", fgColor="1F4E79")
-        ws_mg["B1"].alignment = Alignment(horizontal="center")
-
-        fila_mg = 2
-        mangas = datos["mangas"]
+    mangas = datos.get("mangas", [])
+    f3 = 4
+    if not mangas:
+        _s(ws3, (f3,2), "SIN CAMBIO DE MANGAS EN ESTE RECORRIDO", size=11, color="808080", italic=True)
+    else:
         for i in range(0, len(mangas), 2):
             m1 = mangas[i]
             m2 = mangas[i+1] if i+1 < len(mangas) else {}
-            for label, k1, k2 in [
-                ("NOMBRE:", "nombre", "nombre"),
-                ("DERIVACION:", "derivacion", "derivacion"),
-                ("COORDENADAS:", "coordenadas", "coordenadas"),
-                ("OBSERVACION:", "observacion", "observacion"),
-            ]:
-                ws_mg.cell(fila_mg, 2, label).font = Font(bold=True, name="Arial", size=9)
-                ws_mg.cell(fila_mg, 3, m1.get(k1,"")).font = Font(name="Arial", size=9)
-                ws_mg.cell(fila_mg, 4, label).font = Font(bold=True, name="Arial", size=9)
-                ws_mg.cell(fila_mg, 5, m2.get(k2,"")).font = Font(name="Arial", size=9)
-                fila_mg += 1
-            fila_mg += 1
+            for label, k in [("NOMBRE:", "nombre"), ("DERIVACION:", "derivacion"),
+                              ("COORDENADAS:", "coordenadas"), ("OBSERVACION:", "observacion")]:
+                ws3.row_dimensions[f3].height = 21
+                _s(ws3, (f3,2), label, bold=True, size=11)
+                _s(ws3, (f3,3), m1.get(k,""), size=11)
+                _s(ws3, (f3,4), label, bold=True, size=11)
+                _s(ws3, (f3,5), m2.get(k,""), size=11)
+                f3 += 1
+            ws3.row_dimensions[f3].height = 315
+            ws3.cell(f3, 3, "[FOTO MANGA izquierda]").font = Font(name="Calibri", size=9, color="808080", italic=True)
+            ws3.cell(f3, 5, "[FOTO MANGA derecha]").font = Font(name="Calibri", size=9, color="808080", italic=True)
+            f3 += 2
 
-    # ══════════════════════════════════════════════════════
-    # HOJA 6: INVENTARIO DE HILOS (solo si hay)
-    # ══════════════════════════════════════════════════════
-    if datos["hilos"].get("filas"):
-        ws_h = wb.create_sheet("INVENTARIO DE HILOS EN NODO")
-        ws_h.column_dimensions["B"].width = 8
-        ws_h.column_dimensions["C"].width = 8
-        ws_h.column_dimensions["D"].width = 30
+    # ══════════════════════════════════════════════════════════════════
+    # HOJA 4: INVENTARIO DE HILOS EN NODO
+    # ══════════════════════════════════════════════════════════════════
+    ws4 = wb.create_sheet("INVENTARIO DE HILOS EN NODO")
+    ws4.column_dimensions["A"].width = 9.56
+    ws4.column_dimensions["B"].width = 14.11
+    ws4.column_dimensions["C"].width = 45.44
+    ws4.column_dimensions["D"].width = 9.11
+    ws4.column_dimensions["E"].width = 24.67
 
-        ws_h.merge_cells("B1:D1")
-        ws_h["B1"].value = "INVENTARIO DE HILOS EN NODO - FOR FO 02"
-        ws_h["B1"].font = Font(bold=True, color="FFFFFF", name="Arial")
-        ws_h["B1"].fill = PatternFill("solid", fgColor="1F4E79")
-        ws_h["B1"].alignment = Alignment(horizontal="center")
+    ws4.row_dimensions[2].height = 57
+    _m(ws4, 2,3, 2,6)
+    _s(ws4, (2,3), "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",
+       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
+    _s(ws4, (2,7), "Codigo: FOR FO 02\nVersion: 3 (28/05/2021)", bold=True, size=11)
 
-        ws_h.cell(2, 2, "POSICION ODF:").font = Font(bold=True, name="Arial", size=9)
-        ws_h.cell(2, 3, datos["hilos"].get("posicion_odf","")).font = Font(name="Arial", size=9)
+    _s(ws4, (3,1), "NODO: ", bold=True, size=11)
+    _s(ws4, (3,3), r["nodo_final"], size=11)
+    _s(ws4, (4,1), "NOMBRE ODF DE RUTA:", bold=True, size=11)
+    _s(ws4, (4,3), datos["hilos"].get("posicion_odf",""), size=11)
 
-        for col, txt in [(2,"PAR"),(3,"HILO"),(4,"NOMENCLATURA"),(5,"ESTADO")]:
-            c = ws_h.cell(3, col, txt)
-            c.font = Font(bold=True, color="FFFFFF", name="Arial", size=9)
-            c.fill = PatternFill("solid", fgColor="2E75B6")
-            c.alignment = Alignment(horizontal="center")
+    for col, txt in [(2,"PAR"),(3,"HILO"),(4,"NOMENCLATURA"),(5,"RACK #")]:
+        _s(ws4, (6,col), txt, bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
 
-        fila_h = 4
-        for h in datos["hilos"]["filas"]:
-            ws_h.cell(fila_h, 2, h.get("hilo_par","")).font = Font(name="Arial", size=9)
-            ws_h.cell(fila_h, 3, "").font = Font(name="Arial", size=9)
-            ws_h.cell(fila_h, 4, h.get("descripcion","")).font = Font(name="Arial", size=9)
-            ws_h.cell(fila_h, 5, h.get("estado","")).font = Font(name="Arial", size=9)
-            fila_h += 1
+    f4 = 7
+    hilos = datos["hilos"].get("filas", [])
+    if not hilos:
+        _s(ws4, (f4,2), "SIN CAMBIOS EN ODF EN ESTE RECORRIDO", size=11, color="808080", italic=True)
+    else:
+        for h in hilos:
+            ws4.row_dimensions[f4].height = 21
+            _s(ws4, (f4,2), h.get("hilo_par",""), size=11)
+            _s(ws4, (f4,4), h.get("descripcion",""), size=11)
+            _s(ws4, (f4,5), h.get("estado",""), size=11)
+            f4 += 1
+
+    # ══════════════════════════════════════════════════════════════════
+    # HOJA 5: Checklist CIU
+    # ══════════════════════════════════════════════════════════════════
+    ws5 = wb.create_sheet("Checklist CIU")
+    ws5.column_dimensions["A"].width = 8.67
+    ws5.column_dimensions["B"].width = 25.67
+    ws5.column_dimensions["C"].width = 10.66
+    ws5.column_dimensions["D"].width = 20.66
+    ws5.column_dimensions["E"].width = 10.66
+    ws5.column_dimensions["F"].width = 13.67
+    ws5.column_dimensions["G"].width = 10.66
+    ws5.column_dimensions["H"].width = 13.67
+
+    ws5.row_dimensions[2].height = 45.75
+    _m(ws5, 2,2, 2,7)
+    _s(ws5, (2,2), "CHECKLIST CUADRILLA INTERURBANA",
+       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
+    _s(ws5, (2,8), "Codigo: FOR FO 05\nVersion: 3 (26/06/2025)", bold=True, size=11)
+
+    # Info cabecera CIU
+    _s(ws5, (3,2), "Fecha del Recorrido", bold=True, size=11)
+    _s(ws5, (3,3), r["fecha"], size=11)
+    _s(ws5, (3,5), "Hora Inicio", bold=True, size=11)
+    _s(ws5, (3,6), r["hora_inicio"], size=11)
+    _s(ws5, (3,7), "Hora Fin", bold=True, size=11)
+    _s(ws5, (3,8), r["hora_fin"], size=11)
+
+    f5 = 4
+    for label, valor in [
+        ("Nombre de Ruta", r["nombre_ruta"]),
+        ("Nodo Inicio", r["nodo_inicial"]),
+        ("Nodo Final", r["nodo_final"]),
+        ("Distancia de la Ruta", ciu.get("distancia_ruta","")),
+        ("Lider de Cuadrilla", r["lider"]),
+        ("Vehiculo Placa", ciu.get("vehiculo_placa","")),
+        ("Coordinador Fibra Optica", r["coordinador"]),
+    ]:
+        ws5.row_dimensions[f5].height = 21
+        _s(ws5, (f5,2), label, bold=True, size=11)
+        _m(ws5, f5,3, f5,8)
+        _s(ws5, (f5,3), valor, size=11)
+        f5 += 1
+
+    # Secciones herramientas
+    ciu_herr = ciu.get("herramientas", {})
+    ciu_equi = ciu.get("equipos", {})
+    ciu_mate = ciu.get("materiales", {})
+
+    for seccion_nombre, items, data_sec in [
+        ("HERRAMIENTAS Y EPP", HERRAMIENTAS_EPP, ciu_herr),
+        ("EQUIPOS ELECTRONICOS", EQUIPOS_ELECTRONICOS, ciu_equi),
+        ("MATERIALES E INSUMOS", MATERIALES_INSUMOS, ciu_mate),
+    ]:
+        ws5.row_dimensions[f5].height = 21
+        _m(ws5, f5,2, f5,3)
+        _s(ws5, (f5,2), seccion_nombre, bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
+        _s(ws5, (f5,4), "CANTIDAD", bold=True, size=11, bg="0070C0", halign="center", color="FFFFFF")
+        _s(ws5, (f5,5), "OBSERVACIONES", bold=True, size=11, bg="0070C0", halign="center", color="FFFFFF")
+        f5 += 1
+
+        for nombre in items:
+            ws5.row_dimensions[f5].height = 21
+            _s(ws5, (f5,2), nombre, size=11)
+            info = data_sec.get(nombre, {})
+            cantidad = info.get("cantidad", 0)
+            obs = info.get("obs", "NINGUNA")
+            _s(ws5, (f5,4), cantidad, size=11, halign="center")
+            color_obs = "00B050" if obs == "BUEN ESTADO" else ("FF0000" if obs == "MAL ESTADO" else "808080")
+            _s(ws5, (f5,5), obs, size=11, color="FFFFFF", bg=color_obs, halign="center")
+            f5 += 1
+
+    # Leyenda
+    f5 += 1
+    for txt, bg in [("BUEN ESTADO","00B050"),("MAL ESTADO","FF0000"),("NINGUNA","808080")]:
+        _s(ws5, (f5,2), txt, bold=True, size=11, color="FFFFFF", bg=bg, halign="center")
+        f5 += 1
+
+    # ══════════════════════════════════════════════════════════════════
+    # HOJA 6: Checklists MPRIU
+    # ══════════════════════════════════════════════════════════════════
+    ws6 = wb.create_sheet("Checklists MPRIU")
+    ws6.column_dimensions["A"].width = 8.67
+    ws6.column_dimensions["B"].width = 25.67
+    ws6.column_dimensions["C"].width = 10.66
+    ws6.column_dimensions["D"].width = 31.67
+    ws6.column_dimensions["E"].width = 10.66
+    ws6.column_dimensions["F"].width = 13.67
+    ws6.column_dimensions["G"].width = 10.66
+    ws6.column_dimensions["H"].width = 13.67
+
+    ws6.row_dimensions[2].height = 45.75
+    _m(ws6, 2,2, 2,7)
+    _s(ws6, (2,2), "CHECKLIST DE RECORRIDO DE MANTENIMIENTO PREVENTIVO DE RUTAS INTERURBANAS",
+       bold=True, size=11, color="FFFFFF", bg="0000FF", halign="center")
+    _s(ws6, (2,8), "Codigo: FOR FO 08\nVersion: 02 (28/05/2021)", bold=True, size=11)
+
+    _s(ws6, (3,2), "Fecha del Recorrido", bold=True, size=11)
+    _s(ws6, (3,3), r["fecha"], size=11)
+    _s(ws6, (3,5), "Hora Inicio", bold=True, size=11)
+    _s(ws6, (3,6), r["hora_inicio"], size=11)
+    _s(ws6, (3,7), "Hora Fin", bold=True, size=11)
+    _s(ws6, (3,8), r["hora_fin"], size=11)
+
+    f6 = 4
+    for label, valor in [
+        ("Nombre de Ruta", r["nombre_ruta"]),
+        ("Nodo Inicio", r["nodo_inicial"]),
+        ("Nodo Final", r["nodo_final"]),
+        ("Distancia de la Ruta", ciu.get("distancia_ruta","")),
+        ("Lider de Cuadrilla", r["lider"]),
+        ("Vehiculo Placa", ciu.get("vehiculo_placa","")),
+        ("Coordinador Fibra Optica", r["coordinador"]),
+    ]:
+        ws6.row_dimensions[f6].height = 30
+        _s(ws6, (f6,2), label, bold=True, size=11)
+        _m(ws6, f6,3, f6,8)
+        _s(ws6, (f6,3), valor, size=11)
+        f6 += 1
+
+    # Header tabla novedades
+    ws6.row_dimensions[f6].height = 30
+    _s(ws6, (f6,2), "NOVEDAD", bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
+    _s(ws6, (f6,3), "CHECK", bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
+    _m(ws6, f6,4, f6,7)
+    _s(ws6, (f6,4), "SOLUCION", bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
+    _s(ws6, (f6,8), "CANTIDAD", bold=True, size=11, color="FFFFFF", bg="0070C0", halign="center")
+    f6 += 1
+
+    for novedad in NOVEDADES_MPRIU:
+        ws6.row_dimensions[f6].height = 43.5
+        info = novedades_check.get(novedad, {})
+        tiene = info.get("check", False)
+        cantidad = info.get("cantidad", 0)
+        check_str = "SI" if tiene else "NO"
+        solucion = SOLUCIONES_MPRIU.get(novedad, "")
+
+        _s(ws6, (f6,2), novedad, size=11)
+        c_chk = ws6.cell(f6, 3)
+        c_chk.value = check_str
+        c_chk.font = Font(bold=True, name="Calibri", size=11, color="FFFFFF")
+        from openpyxl.styles import Alignment as Al
+        c_chk.alignment = Al(horizontal="center", vertical="center")
+        c_chk.fill = PatternFill("solid", fgColor="00B050" if tiene else "FF0000")
+
+        _m(ws6, f6,4, f6,7)
+        _s(ws6, (f6,4), solucion, size=11)
+        _s(ws6, (f6,8), cantidad if tiene else 0, size=11, halign="center")
+        f6 += 1
+
+    # Observaciones
+    ws6.row_dimensions[f6].height = 60
+    _s(ws6, (f6,2), "Observaciones:", bold=True, size=11)
+    _m(ws6, f6,3, f6,8)
+    _s(ws6, (f6,3), r["observaciones"], size=11)
 
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
     return buf.read()
+
 
 def datos_vacios():
     return {
