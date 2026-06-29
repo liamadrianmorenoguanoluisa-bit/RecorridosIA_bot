@@ -190,9 +190,9 @@ def _copiar_logos(wb_src, wb_dst):
             ws_dst.add_image(img_nuevo)
 
 def _get_plantilla():
-    """Carga la plantilla FOR FO 02 desde el mismo directorio del bot."""
+    """Carga la plantilla FOR FO 02 — si no existe crea un workbook basico."""
     import os
-    from openpyxl import load_workbook
+    from openpyxl import load_workbook, Workbook
     rutas = [
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "plantilla_FOR_FO_02.xlsx"),
         "plantilla_FOR_FO_02.xlsx",
@@ -200,8 +200,16 @@ def _get_plantilla():
     ]
     for ruta in rutas:
         if os.path.exists(ruta):
+            logger.info("Plantilla encontrada: " + ruta)
             return load_workbook(ruta)
-    raise FileNotFoundError("No se encontro plantilla_FOR_FO_02.xlsx")
+
+    # Fallback: crear workbook con las hojas necesarias
+    logger.warning("Plantilla no encontrada, usando workbook basico")
+    wb = Workbook()
+    wb.active.title = "REPORTES_DE_RECORRIDOS"
+    for nombre in ["FOTOS_ANEXAS_AL_REPORTE","MANGAS","INVENTARIO DE HILOS EN NODO","Checklist CIU","Checklists MPRIU"]:
+        wb.create_sheet(nombre)
+    return wb
 
 def generar_excel(datos):
     from openpyxl import load_workbook
@@ -746,16 +754,16 @@ async def recv_hilo_datos(update, ctx):
     return HILO_DATOS
 
 async def enviar_excel(update, ctx):
-    # Soporta tanto message como callback_query
-    chat_id = None
-    if update.callback_query:
-        chat_id = update.callback_query.message.chat_id
-        await update.callback_query.edit_message_text("Generando informe FOR FO 02...")
-    else:
-        chat_id = update.message.chat_id
-        await update.message.reply_text("Generando informe FOR FO 02...", reply_markup=ReplyKeyboardRemove())
-
     try:
+        # Obtener el chat para responder
+        if update.callback_query:
+            msg = update.callback_query.message
+            await update.callback_query.answer()
+            await msg.reply_text("Generando informe FOR FO 02...")
+        else:
+            msg = update.message
+            await msg.reply_text("Generando informe FOR FO 02...")
+
         if "datos" not in ctx.user_data:
             ctx.user_data["datos"] = datos_vacios()
         datos = ctx.user_data["datos"]
@@ -774,18 +782,20 @@ async def enviar_excel(update, ctx):
             "Ruta: " + (datos["recorrido"]["nombre_ruta"] or "SIN NOMBRE") + chr(10) +
             "Novedades: " + str(len(datos["recorrido"]["novedades"]))
         )
-        await update.effective_message.reply_document(
-            document=xl, filename=nombre, caption=caption
-        )
+        await msg.reply_document(document=xl, filename=nombre, caption=caption)
+
     except Exception as e:
         logger.error("Error generando Excel: " + str(e))
-        await update.effective_message.reply_text("Error generando Excel: " + str(e))
+        try:
+            await msg.reply_text("Error: " + str(e))
+        except Exception:
+            pass
 
     teclado = [["Inspeccionar", "Nueva Ruta Base"], ["Mis Rutas"]]
-    await update.effective_message.reply_text(
-        "Que deseas hacer?",
-        reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True)
-    )
+    try:
+        await msg.reply_text("Que deseas hacer?", reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True))
+    except Exception:
+        pass
     return MENU_PRINCIPAL
 
 async def tab_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
