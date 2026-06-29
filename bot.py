@@ -651,25 +651,79 @@ async def pregunta_mangas(update, ctx):
     return PREGUNTA_HILOS
 
 async def recv_manga_nombre(update, ctx):
-    if update.message.text.upper() == "FIN MANGAS":
-        teclado = [["SI, hubo cambio en ODF", "No hubo cambio"]]
-        await update.message.reply_text("Hubo cambio en ODF?", reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True, one_time_keyboard=True))
-        return PREGUNTA_HILOS
-    ctx.user_data["manga_temp"] = {"nombre": update.message.text.upper(), "derivacion": "NO"}
-    await update.message.reply_text("Coordenadas de la manga?\nEjemplo: -0.477057,-78.579350")
+    txt = update.message.text.strip().upper()
+    if txt == "FIN MANGAS":
+        total = len(ctx.user_data["datos"]["mangas"])
+        await update.message.reply_text(
+            "✅ " + str(total) + " manga(s) guardada(s)." + chr(10) +
+            "Volviendo al menu..."
+        )
+        return await tab_menu(update, ctx)
+
+    ctx.user_data["manga_temp"] = {"nombre": txt}
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("SI - Con derivacion", callback_data="manga_der_si"),
+         InlineKeyboardButton("NO - Sin derivacion", callback_data="manga_der_no")],
+    ])
+    await update.message.reply_text(
+        "✅ Nombre: " + txt + chr(10) + chr(10) +
+        "¿Tiene derivacion esta manga?",
+        reply_markup=teclado
+    )
     return MANGA_COORDS
 
+
 async def recv_manga_coords(update, ctx):
-    ctx.user_data["manga_temp"]["coordenadas"] = update.message.text
-    await update.message.reply_text("Observacion de la manga?\nSi no hay: NINGUNA")
+    """Recibe coordenadas de la manga."""
+    ctx.user_data["manga_temp"]["coordenadas"] = update.message.text.strip()
+    await update.message.reply_text(
+        "✅ Coordenadas: " + update.message.text.strip() + chr(10) + chr(10) +
+        "📝 Observacion de la manga:" + chr(10) +
+        "Si no hay escribe: NINGUNA"
+    )
     return MANGA_OBS
 
 async def recv_manga_obs(update, ctx):
-    manga = ctx.user_data.pop("manga_temp")
-    manga["observacion"] = "" if update.message.text.upper() == "NINGUNA" else update.message.text
+    """Recibe observacion y guarda la manga completa."""
+    obs = update.message.text.strip()
+    if obs.upper() == "NINGUNA":
+        obs = ""
+    manga = ctx.user_data.pop("manga_temp", {})
+    manga["observacion"] = obs
+    manga.setdefault("derivacion", "NO")
     ctx.user_data["datos"]["mangas"].append(manga)
-    await update.message.reply_text("Manga guardada. Siguiente nombre o FIN MANGAS:")
+
+    total = len(ctx.user_data["datos"]["mangas"])
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Terminar mangas", callback_data="tab_menu")]
+    ])
+    await update.message.reply_text(
+        "✅ Manga #" + str(total) + " guardada!" + chr(10) + chr(10) +
+        "Nombre:       " + manga.get("nombre","") + chr(10) +
+        "Derivacion:   " + manga.get("derivacion","NO") + chr(10) +
+        "Coordenadas:  " + manga.get("coordenadas","") + chr(10) +
+        "Observacion:  " + (obs or "NINGUNA") + chr(10) + chr(10) +
+        "📝 Nombre de la manga #" + str(total+1) + ":" + chr(10) +
+        "O escribe: FIN MANGAS",
+        reply_markup=teclado
+    )
+    ctx.user_data["manga_temp"] = {}
     return MANGA_NOMBRE
+
+async def manga_derivacion_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Callback para derivacion SI/NO."""
+    query = update.callback_query
+    await query.answer()
+    derivacion = "SI" if query.data == "manga_der_si" else "NO"
+    ctx.user_data["manga_temp"]["derivacion"] = derivacion
+    await query.edit_message_text(
+        "✅ Nombre: " + ctx.user_data["manga_temp"].get("nombre","") + chr(10) +
+        "✅ Derivacion: " + derivacion + chr(10) + chr(10) +
+        "📍 Coordenadas GPS de la manga:" + chr(10) +
+        "Ejemplo: -0.477057,-78.579350"
+    )
+    return MANGA_COORDS
+
 
 async def pregunta_hilos(update, ctx):
     if "SI" in update.message.text.upper():
@@ -692,58 +746,97 @@ async def recv_hilo_datos(update, ctx):
     return HILO_DATOS
 
 async def enviar_excel(update, ctx):
-    await update.message.reply_text("Generando informe FOR FO 02...", reply_markup=ReplyKeyboardRemove())
+    # Soporta tanto message como callback_query
+    chat_id = None
+    if update.callback_query:
+        chat_id = update.callback_query.message.chat_id
+        await update.callback_query.edit_message_text("Generando informe FOR FO 02...")
+    else:
+        chat_id = update.message.chat_id
+        await update.message.reply_text("Generando informe FOR FO 02...", reply_markup=ReplyKeyboardRemove())
+
     try:
+        if "datos" not in ctx.user_data:
+            ctx.user_data["datos"] = datos_vacios()
         datos = ctx.user_data["datos"]
-        xl = generar_excel(datos)
+
+        # Si no hay novedades agregar sin novedad por defecto
+        if not datos["recorrido"].get("novedades"):
+            nov = novedad_vacia(1)
+            nov["motivo"]  = "NO SE REGISTRAN NOVEDADES DURANTE LA INSPECCION."
+            nov["remedio"] = "NO SE ENCUENTRAN NOVEDADES QUE SIGNIFIQUEN RIESGOS EN EL CABLE DE LA RED INTERURBANO."
+            datos["recorrido"]["novedades"] = [nov]
+
+        xl     = generar_excel(datos)
         nombre = nombre_archivo(datos)
-        await update.message.reply_document(document=xl, filename=nombre, caption="FOR FO 02 generado\nRuta: " + datos["recorrido"]["nombre_ruta"] + "\nNovedades: " + str(len(datos["recorrido"]["novedades"])))
+        caption = (
+            "FOR FO 02 generado" + chr(10) +
+            "Ruta: " + (datos["recorrido"]["nombre_ruta"] or "SIN NOMBRE") + chr(10) +
+            "Novedades: " + str(len(datos["recorrido"]["novedades"]))
+        )
+        await update.effective_message.reply_document(
+            document=xl, filename=nombre, caption=caption
+        )
     except Exception as e:
-        await update.message.reply_text("Error: " + str(e))
+        logger.error("Error generando Excel: " + str(e))
+        await update.effective_message.reply_text("Error generando Excel: " + str(e))
+
     teclado = [["Inspeccionar", "Nueva Ruta Base"], ["Mis Rutas"]]
-    await update.message.reply_text("Que deseas hacer?", reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True))
+    await update.effective_message.reply_text(
+        "Que deseas hacer?",
+        reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True)
+    )
     return MENU_PRINCIPAL
 
 async def tab_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Menu principal de pestanas con botones inline."""
+    """Menu de pestanas con estado visual."""
     if update.effective_user.id not in USUARIOS_AUTENTICADOS:
         return await start(update, ctx)
     if "datos" not in ctx.user_data:
         ctx.user_data["datos"] = datos_vacios()
 
     datos = ctx.user_data["datos"]
-    r = datos["recorrido"]
+    r     = datos["recorrido"]
 
     ciu_ok   = bool(datos["ciu"].get("vehiculo_placa"))
     mpriu_ok = bool(datos["mpriu"].get("novedades_check"))
     rep_ok   = bool(r.get("nombre_ruta"))
     novedades = len(r.get("novedades", []))
-    man_ok   = bool(datos.get("mangas"))
-    hil_ok   = bool(datos["hilos"].get("filas"))
+    fotos_ok  = novedades > 0
+    man_ok    = bool(datos.get("mangas"))
+    hil_ok    = bool(datos["hilos"].get("filas"))
 
-    def tick(ok): return "OK" if ok else "--"
+    def v(ok): return "✅" if ok else "⬜"
 
-    fotos_ok = bool(r.get("fotos_total", 0))
-    teclado_inline = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Checklist CIU [" + tick(ciu_ok) + "]", callback_data="tab_1")],
-        [InlineKeyboardButton("Checklists MPRIU [" + tick(mpriu_ok) + "]", callback_data="tab_2")],
-        [InlineKeyboardButton("REPORTES_DE_RECORRIDOS [" + tick(rep_ok) + "]", callback_data="tab_reportes")],
-        [InlineKeyboardButton("FOTOS_ANEXAS_AL_REPORTE [" + str(novedades) + " nov]", callback_data="tab_fotos")],
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton(v(ciu_ok)   + " Checklist CIU",            callback_data="tab_1")],
+        [InlineKeyboardButton(v(mpriu_ok) + " Checklists MPRIU",         callback_data="tab_2")],
+        [InlineKeyboardButton(v(rep_ok)   + " REPORTES_DE_RECORRIDOS",   callback_data="tab_reportes")],
+        [InlineKeyboardButton(v(fotos_ok) + " FOTOS_ANEXAS_AL_REPORTE",  callback_data="tab_fotos")],
         [
-            InlineKeyboardButton("Mangas [" + tick(man_ok) + "]", callback_data="tab_5"),
-            InlineKeyboardButton("Hilos ODF [" + tick(hil_ok) + "]", callback_data="tab_6"),
+            InlineKeyboardButton(v(man_ok) + " Mangas",    callback_data="tab_5"),
+            InlineKeyboardButton(v(hil_ok) + " Hilos ODF", callback_data="tab_6"),
         ],
-        [InlineKeyboardButton("GENERAR EXCEL", callback_data="tab_generar")],
+        [InlineKeyboardButton("📄 GENERAR EXCEL", callback_data="tab_generar")],
     ])
 
-    msg = "INFORME FOR FO 02" + chr(10) + "Selecciona la pestana que quieres llenar:"
+    completadas = sum([ciu_ok, mpriu_ok, rep_ok, fotos_ok])
+    msg = (
+        "📋 INFORME FOR FO 02" + chr(10) +
+        "Completado: " + str(completadas) + "/4 pestanas principales" + chr(10) + chr(10) +
+        "Selecciona la pestana que quieres llenar:"
+    )
 
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.edit_message_text(msg, reply_markup=teclado_inline)
+        try:
+            await update.callback_query.edit_message_text(msg, reply_markup=teclado)
+        except Exception:
+            await update.callback_query.message.reply_text(msg, reply_markup=teclado)
     else:
-        await update.message.reply_text(msg, reply_markup=teclado_inline)
+        await update.message.reply_text(msg, reply_markup=teclado)
     return TAB_MENU
+
 
 async def tab_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Maneja los callbacks de los botones inline."""
@@ -756,29 +849,62 @@ async def tab_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await enviar_excel(update, ctx)
 
     elif data == "tab_1":
-        teclado = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Volver al menu", callback_data="tab_menu")]
-        ])
-        await query.edit_message_text(
-            "CHECKLIST CIU - HERRAMIENTAS Y EPP" + chr(10) + chr(10) +
-            "Indica cantidades separadas por coma:" + chr(10) +
-            "Cinturon,Casco,Esc24,Esc28,Esc32,Conos,Caja," + chr(10) +
-            "Destorn,Martillo,Estiletes,Cortafrio,Alicate,Llave," + chr(10) +
-            "Rachet,Guantes,Tecle,Machete,Cizalla,Pata,Flejadora," + chr(10) +
-            "Extension,Motosierra,Tijeras,Arco,Binoculares,Parasol,Remolque" + chr(10) + chr(10) +
-            "Ejemplo: 2,2,0,2,0,6,0,1,1,2,2,0,0,1,2,2,2,1,0,0,0,0,0,0,0,0,0",
-            reply_markup=teclado
+        teclado = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Volver al menu", callback_data="tab_menu")]])
+        msg = (
+            "🔧 CHECKLIST CIU — HERRAMIENTAS Y EPP" + chr(10) +
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + chr(10) + chr(10) +
+            "Escribe las cantidades en orden:" + chr(10) +
+            "separadas por coma (,)" + chr(10) + chr(10) +
+            " 1. Cinturon y Linea de Vida" + chr(10) +
+            " 2. Casco" + chr(10) +
+            " 3. Escalera 24 pies" + chr(10) +
+            " 4. Escalera 28 pies" + chr(10) +
+            " 5. Escalera 32 pies" + chr(10) +
+            " 6. Conos reflectivos" + chr(10) +
+            " 7. Caja para herramientas" + chr(10) +
+            " 8. Juego destornilladores" + chr(10) +
+            " 9. Martillo mediano" + chr(10) +
+            "10. Estiletes" + chr(10) +
+            "11. Cortafrio" + chr(10) +
+            "12. Alicate" + chr(10) +
+            "13. Llave francesa" + chr(10) +
+            "14. Juego de rachet" + chr(10) +
+            "15. Guantes aislantes (pares)" + chr(10) +
+            "16. Tecle" + chr(10) +
+            "17. Machete" + chr(10) +
+            "18. Cizalla" + chr(10) +
+            "19. Pata de cabra" + chr(10) +
+            "20. Flejadora Eriband" + chr(10) +
+            "21. Extension con foco" + chr(10) +
+            "22. Motosierra" + chr(10) +
+            "23. Tijeras metalicas" + chr(10) +
+            "24. Arco de sierra" + chr(10) +
+            "25. Binoculares" + chr(10) +
+            "26. Parasol" + chr(10) +
+            "27. Remolque / Carrete FO" + chr(10) + chr(10) +
+            "📝 Ejemplo:" + chr(10) +
+            "2,2,0,2,0,6,0,1,1,2,2,0,0,1,2,2,2,1,0,0,0,0,0,0,0,0,0"
         )
+        await query.edit_message_text(msg, reply_markup=teclado)
         ctx.user_data["tab_actual"] = "1"
         return TAB_CIU_HERR
 
     elif data == "tab_2":
-        msg = "CHECKLIST MPRIU" + chr(10) + chr(10)
-        msg += "Escribe los NUMEROS de las novedades (separados por coma):" + chr(10) + chr(10)
+        msg = (
+            "📋 CHECKLISTS MPRIU" + chr(10) +
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + chr(10) + chr(10) +
+            "Escribe los NUMEROS de las novedades" + chr(10) +
+            "encontradas separados por coma:" + chr(10) + chr(10)
+        )
         for i, nov in enumerate(NOVEDADES_MPRIU, 1):
-            msg += str(i) + ". " + nov + chr(10)
-        msg += chr(10) + "Ejemplo: 16,18" + chr(10) + "Sin novedades: 31"
-        teclado = InlineKeyboardMarkup([[InlineKeyboardButton("Volver al menu", callback_data="tab_menu")]])
+            num = str(i).rjust(2)
+            msg += num + ". " + nov + chr(10)
+        msg += (
+            chr(10) + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + chr(10) +
+            "📝 Ejemplo: 16,18" + chr(10) +
+            "Sin novedades escribe: 31"
+        )
+        teclado = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Volver al menu", callback_data="tab_menu")]])
         await query.edit_message_text(msg, reply_markup=teclado)
         ctx.user_data["tab_actual"] = "2"
         return TAB_MPRIU
@@ -861,18 +987,20 @@ async def tab_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return TAB_NOVEDADES_IA
 
     elif data == "tab_5":
-        teclado = InlineKeyboardMarkup([[InlineKeyboardButton("Volver al menu", callback_data="tab_menu")]])
+        ctx.user_data["datos"]["mangas"] = []
+        ctx.user_data["manga_paso"] = "nombre"
+        ctx.user_data["manga_temp"] = {}
+        ctx.user_data["tab_actual"] = "5"
+        teclado = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Volver al menu", callback_data="tab_menu")]])
         await query.edit_message_text(
-            "MANGAS" + chr(10) + chr(10) +
-            "Ingresa cada manga en formato:" + chr(10) +
-            "NOMBRE | DERIVACION | COORDENADAS | OBSERVACION" + chr(10) + chr(10) +
-            "Ejemplo:" + chr(10) +
-            "UIO-B-MAC/GOS-F1-DER-01 | NO | -0.477057,-78.579350 | NINGUNA" + chr(10) + chr(10) +
-            "Cuando termines escribe: FIN MANGAS",
+            "🔌 MANGAS" + chr(10) +
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + chr(10) + chr(10) +
+            "Voy a pedirte los datos de cada manga" + chr(10) +
+            "uno por uno para no confundirte." + chr(10) + chr(10) +
+            "📝 Nombre de la manga #1:" + chr(10) +
+            "Ejemplo: UIO-B-MAC/GOS-F1-DER-01",
             reply_markup=teclado
         )
-        ctx.user_data["tab_actual"] = "5"
-        ctx.user_data["datos"]["mangas"] = []
         return MANGA_NOMBRE
 
     elif data == "tab_6":
@@ -1012,7 +1140,17 @@ async def tab_mpriu_cantidades(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                             nch[novedad]["cantidad"] = int(cant_str)
         ctx.user_data["datos"]["mpriu"]["novedades_check"] = nch
 
-    await update.message.reply_text("Checklist MPRIU guardado!")
+    resumen = ""
+    for nov, info in ctx.user_data["datos"]["mpriu"]["novedades_check"].items():
+        if info.get("check"):
+            resumen += "  ✅ " + nov + " x" + str(info.get("cantidad",0)) + chr(10)
+    await update.message.reply_text(
+        "✅ CHECKLIST MPRIU COMPLETO" + chr(10) +
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + chr(10) +
+        (resumen if resumen else "  Sin novedades") + chr(10) +
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + chr(10) +
+        "Volviendo al menu..."
+    )
     return await tab_menu(update, ctx)
 
 async def tab_reportes(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -1329,57 +1467,176 @@ async def nueva_ruta(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def recv_nueva_ruta_nombre(update, ctx):
     ctx.user_data["nueva_ruta_nombre"] = update.message.text.upper()
+    nombre = ctx.user_data["nueva_ruta_nombre"]
+
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Tengo el link de Mapillary", callback_data="vb_link")],
+        [InlineKeyboardButton("Subir video directo aqui", callback_data="vb_video")],
+        [InlineKeyboardButton("Cancelar", callback_data="tab_menu")],
+    ])
     await update.message.reply_text(
-        "Ruta: " + ctx.user_data["nueva_ruta_nombre"] + "\n\n"
-        "Ahora graba el video con tu Insta360 y subelo a Mapillary.\n\n"
-        "Cuando termines pega el LINK de Mapillary aqui.\n"
-        "Ejemplo: https://www.mapillary.com/app/user/xxx?pKey=xxx\n\n"
-        "O si quieres subir el video directo, envialo aqui y el bot lo procesara."
+        "Nueva Ruta Base: " + nombre + chr(10) + chr(10) +
+        "Como quieres registrar el video base?",
+        reply_markup=teclado
     )
     return NUEVA_RUTA_VIDEO
 
 async def recv_nueva_ruta_video(update, ctx):
+    """Recibe el video o link segun lo que escriba el usuario."""
     nombre = ctx.user_data.get("nueva_ruta_nombre", "SIN NOMBRE")
-    
-    if update.message.text and update.message.text.startswith("http"):
-        # Guarda el link de Mapillary
+    modo   = ctx.user_data.get("modo_video_base", "link")
+
+    # Si es link de Mapillary
+    if update.message.text and update.message.text.strip().startswith("http"):
+        link = update.message.text.strip()
         RUTAS_GUARDADAS[nombre] = {
-            "nombre": nombre,
-            "mapillary_link": update.message.text.strip(),
-            "tipo": "mapillary",
-            "fecha": datetime.now().strftime("%d/%m/%Y %H:%M")
+            "nombre":         nombre,
+            "mapillary_link": link,
+            "tipo":           "mapillary",
+            "fecha":          datetime.now().strftime("%d/%m/%Y %H:%M"),
         }
         await update.message.reply_text(
-            "Ruta base guardada\n\n"
-            "Nombre: " + nombre + "\n"
-            "Link: " + update.message.text.strip() + "\n\n"
-            "Ya puedes usar esta ruta en futuras inspecciones."
+            "Ruta base guardada!" + chr(10) + chr(10) +
+            "Nombre: " + nombre + chr(10) +
+            "Link: " + link + chr(10) +
+            "Fecha: " + datetime.now().strftime("%d/%m/%Y %H:%M") + chr(10) + chr(10) +
+            "Abre el link para ver la ruta con el munequito en Mapillary." + chr(10) +
+            "En futuras inspecciones el bot comparara con este video base."
         )
-    elif update.message.video or update.message.document:
-        # Guarda referencia del video enviado
-        RUTAS_GUARDADAS[nombre] = {
-            "nombre": nombre,
-            "tipo": "video_telegram",
-            "fecha": datetime.now().strftime("%d/%m/%Y %H:%M")
-        }
-        await update.message.reply_text(
-            "Video recibido\n\n"
-            "Ruta base guardada: " + nombre + "\n"
-            "Fecha: " + datetime.now().strftime("%d/%m/%Y %H:%M") + "\n\n"
-            "Ya puedes usar esta ruta en futuras inspecciones."
+        teclado = [["Inspeccionar", "Nueva Ruta Base"], ["Mis Rutas", "Ayuda"]]
+        await update.message.reply_text("Que deseas hacer?", reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True))
+        return MENU_PRINCIPAL
+
+    # Si envia video directamente
+    if update.message.video or update.message.document:
+        await update.message.reply_text("Video recibido. Subiendo a Mapillary...")
+        try:
+            # Descargar video de Telegram
+            if update.message.video:
+                file_obj = await update.message.video.get_file()
+            else:
+                file_obj = await update.message.document.get_file()
+
+            video_bytes = await file_obj.download_as_bytearray()
+
+            # Subir a Mapillary via API
+            link_mapillary = await _subir_video_mapillary(bytes(video_bytes), nombre)
+
+            RUTAS_GUARDADAS[nombre] = {
+                "nombre":         nombre,
+                "mapillary_link": link_mapillary,
+                "tipo":           "video_subido",
+                "fecha":          datetime.now().strftime("%d/%m/%Y %H:%M"),
+            }
+
+            await update.message.reply_text(
+                "Video subido a Mapillary!" + chr(10) + chr(10) +
+                "Ruta: " + nombre + chr(10) +
+                "Link: " + link_mapillary + chr(10) + chr(10) +
+                "En unos minutos Mapillary procesa el video." + chr(10) +
+                "Luego podras ver la ruta con el munequito."
+            )
+        except Exception as e:
+            logger.error("Error subiendo a Mapillary: " + str(e))
+            await update.message.reply_text(
+                "Error subiendo el video: " + str(e) + chr(10) + chr(10) +
+                "Intenta subir el video manualmente en mapillary.com" + chr(10) +
+                "y luego pega el link aqui."
+            )
+            return NUEVA_RUTA_VIDEO
+
+        teclado = [["Inspeccionar", "Nueva Ruta Base"], ["Mis Rutas", "Ayuda"]]
+        await update.message.reply_text("Que deseas hacer?", reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True))
+        return MENU_PRINCIPAL
+
+    # Si escribe texto que no es link
+    await update.message.reply_text(
+        "Envia el video o el link de Mapillary." + chr(10) +
+        "Ejemplo link: https://www.mapillary.com/app/?pKey=xxx"
+    )
+    return NUEVA_RUTA_VIDEO
+
+async def _subir_video_mapillary(video_bytes: bytes, nombre_ruta: str) -> str:
+    """Sube un video a Mapillary usando la API oficial y retorna el link."""
+    if not MAPILLARY_TOKEN:
+        raise ValueError("MAPILLARY_TOKEN no configurado en Render")
+
+    headers = {"Authorization": "OAuth " + MAPILLARY_TOKEN}
+
+    # Paso 1: Crear sesion de subida en Mapillary
+    async with httpx.AsyncClient(timeout=60) as client:
+        # Crear upload session
+        resp = await client.post(
+            "https://graph.mapillary.com/v4/upload/sessions",
+            headers=headers,
+            json={
+                "type": "equirectangular",
+                "organization_id": None,
+            }
         )
-    else:
-        await update.message.reply_text(
-            "Envia el link de Mapillary o el video de la ruta.\n"
-            "Ejemplo link: https://www.mapillary.com/..."
+        if resp.status_code != 200:
+            raise ValueError("Error creando sesion Mapillary: " + resp.text)
+
+        session = resp.json()
+        session_key = session.get("key", "")
+        upload_url  = session.get("fields", {}).get("url", "https://rupload.facebook.com/mapillary_public")
+
+        # Paso 2: Subir el video
+        upload_resp = await client.post(
+            upload_url + "/" + session_key,
+            headers={
+                "Authorization": "OAuth " + MAPILLARY_TOKEN,
+                "Content-Type":  "video/mp4",
+                "X-Mapillary-Client-Token": MAPILLARY_TOKEN,
+            },
+            content=video_bytes
+        )
+
+        if upload_resp.status_code not in [200, 201]:
+            raise ValueError("Error subiendo video: " + upload_resp.text)
+
+        # Paso 3: Publicar la sesion
+        pub_resp = await client.post(
+            "https://graph.mapillary.com/v4/upload/sessions/" + session_key + "/publish",
+            headers=headers,
+            json={"close": True}
+        )
+
+        sequence_key = pub_resp.json().get("sequence_key", session_key)
+        link = "https://www.mapillary.com/app/?lat=0&lng=0&z=14&sequence_key=" + str(sequence_key)
+        return link
+
+async def vb_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Maneja callbacks de Nueva Ruta Base."""
+    query = update.callback_query
+    await query.answer()
+    data  = query.data
+
+    if data == "vb_link":
+        ctx.user_data["modo_video_base"] = "link"
+        await query.edit_message_text(
+            "Pega el link de Mapillary de tu video base:" + chr(10) + chr(10) +
+            "Ejemplo:" + chr(10) +
+            "https://www.mapillary.com/app/?pKey=ABC123" + chr(10) + chr(10) +
+            "Si aun no tienes el video en Mapillary:" + chr(10) +
+            "1. Graba con tu Insta360 X3" + chr(10) +
+            "2. Abre la app Mapillary en tu celular" + chr(10) +
+            "3. Sube el video desde la app" + chr(10) +
+            "4. Copia el link y pegalo aqui"
         )
         return NUEVA_RUTA_VIDEO
 
-    teclado = [["Inspeccionar", "Nueva Ruta Base"], ["Mis Rutas", "Ayuda"]]
-    await update.message.reply_text(
-        "Que deseas hacer?",
-        reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True)
-    )
+    elif data == "vb_video":
+        ctx.user_data["modo_video_base"] = "video"
+        await query.edit_message_text(
+            "Envia el video de la ruta directamente aqui." + chr(10) + chr(10) +
+            "El bot lo subira automaticamente a Mapillary" + chr(10) +
+            "usando tu MAPILLARY_TOKEN." + chr(10) + chr(10) +
+            "Formatos: .mp4, .mov, .insv (Insta360)" + chr(10) + chr(10) +
+            "NOTA: Videos grandes pueden tardar unos minutos."
+        )
+        return NUEVA_RUTA_VIDEO
+
     return MENU_PRINCIPAL
 
 async def mis_rutas(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -1542,7 +1799,10 @@ def build_app():
         allow_reentry=True,
     )
     app.add_handler(conv)
-    app.add_handler(CallbackQueryHandler(tab_callback))
+    app.add_handler(CallbackQueryHandler(tab_callback,          pattern="^tab_"))
+    app.add_handler(CallbackQueryHandler(tab_callback,          pattern="^rep_"))
+    app.add_handler(CallbackQueryHandler(vb_callback,           pattern="^vb_"))
+    app.add_handler(CallbackQueryHandler(manga_derivacion_callback, pattern="^manga_der_"))
     return app
 
 async def run_bot():
