@@ -926,3 +926,48 @@ def start_web():
 def build_app():
     app=Application.builder().token(BOT_TOKEN).build()
     conv=ConversationHandler(
+        entry_points=[CommandHandler("start",start),CommandHandler("inspeccionar",generar_informe),MessageHandler(filters.Regex("Generar Informe"),generar_informe),MessageHandler(filters.Regex("Nueva Ruta Base"),nueva_ruta),MessageHandler(filters.Regex("Mis Rutas"),mis_rutas),MessageHandler(filters.Regex("Ayuda"),ayuda)],
+        states={
+            ESPERANDO_TOTP:   [MessageHandler(filters.TEXT&~filters.COMMAND,handler_totp)],
+            MENU_PRINCIPAL:   [MessageHandler(filters.Regex("Generar Informe"),generar_informe),MessageHandler(filters.Regex("Nueva Ruta Base"),nueva_ruta),MessageHandler(filters.Regex("Mis Rutas"),mis_rutas),MessageHandler(filters.Regex("Ayuda"),ayuda),MessageHandler(filters.TEXT&~filters.COMMAND,menu_principal)],
+            TAB_MENU:         [MessageHandler(filters.TEXT&~filters.COMMAND,generar_informe)],
+            TAB_CIU_HERR:     [MessageHandler(filters.TEXT&~filters.COMMAND,tab_ciu_herr)],
+            TAB_CIU_EQUI:     [MessageHandler(filters.TEXT&~filters.COMMAND,tab_ciu_equi)],
+            TAB_CIU_MATE:     [MessageHandler(filters.TEXT&~filters.COMMAND,tab_ciu_mate)],
+            TAB_MPRIU:        [MessageHandler(filters.TEXT&~filters.COMMAND,tab_mpriu)],
+            TAB_REPORTES:     [MessageHandler(filters.TEXT&~filters.COMMAND,tab_reportes)],
+            TAB_NOVEDADES_IA: [MessageHandler(filters.PHOTO,tab_novedades_ia),MessageHandler(filters.TEXT&~filters.COMMAND,tab_novedades_ia)],
+            MANGA_NOMBRE:     [MessageHandler(filters.TEXT&~filters.COMMAND,recv_manga_nombre)],
+            MANGA_COORDS:     [MessageHandler(filters.TEXT&~filters.COMMAND,recv_manga_coords)],
+            MANGA_OBS:        [MessageHandler(filters.TEXT&~filters.COMMAND,recv_manga_obs)],
+            HILO_ODF:         [MessageHandler(filters.TEXT&~filters.COMMAND,recv_hilo_odf)],
+            HILO_DATOS:       [MessageHandler(filters.TEXT&~filters.COMMAND,recv_hilo_datos)],
+            NUEVA_RUTA_NOMBRE:[MessageHandler(filters.TEXT&~filters.COMMAND,recv_nueva_ruta_nombre)],
+            NUEVA_RUTA_VIDEO: [MessageHandler(filters.TEXT|filters.VIDEO|filters.Document.ALL&~filters.COMMAND,recv_nueva_ruta_video)],
+        },
+        fallbacks=[CommandHandler("cancelar",cancelar)],
+        allow_reentry=True,
+    )
+    app.add_handler(conv)
+    app.add_handler(CallbackQueryHandler(tab_callback,pattern="^tab_"))
+    app.add_handler(CallbackQueryHandler(tab_callback,pattern="^rep_"))
+    app.add_handler(CallbackQueryHandler(vb_callback,pattern="^vb_"))
+    app.add_handler(CallbackQueryHandler(tab_callback,pattern="^manga_der_"))
+    return app
+
+async def run_bot():
+    app=build_app()
+    await app.initialize(); await app.start(); await app.updater.start_polling()
+    logger.info("RecorridosIA bot arrancando...")
+    while True:
+        import asyncio; await asyncio.sleep(1)
+
+def bot_thread():
+    import asyncio
+    loop=asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+    loop.run_until_complete(run_bot())
+
+if __name__=="__main__":
+    t=threading.Thread(target=bot_thread,daemon=True); t.start()
+    logger.info("RecorridosIA bot arrancando...")
+    start_web()
