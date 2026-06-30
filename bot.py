@@ -3,7 +3,7 @@ import httpx
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, ConversationHandler, ContextTypes, filters, CallbackQueryHandler
 
@@ -80,6 +80,8 @@ HERR = ["Cinturon y Linea de Vida","Casco","Escalera de 24 pies","Escalera de 28
 EQUI = ["Fusionadora","Cortadora de fibra","Bobina de lanzamiento","OTDR con cargador","Llave Acsys","GPS","Inversor","Etiquetadora"]
 MATE = ["Fibra 48h (500mt)","Mangas de 48h y/o 144h (2 minimo)","Rollo de cinta Eriband 3/4","Hebillas para cinta Eriband 3/4","Hojas de sierra","Patchcord de fibra","Adaptadores (Simplex-Duplex)","Paquetes de amarras","Mesas plasticas","Sillas plasticas","Cuchillos","Poleas","Sogas de nylon medianas","Sogas de nylon gruesas","Repelente contra insectos","Repelente contra abejas y avispas"]
 
+LOGO_B64 = "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"
+
 AZUL="0000FF"; GRIS="969696"; GRIS2="D9D9D9"; GRIS3="C0C0C0"
 AZUL2="0070C0"; VERDE="00B050"; ROJO="FF0000"; BLANCO="FFFFFF"
 
@@ -121,17 +123,93 @@ async def analizar_imagen(img_bytes):
         return None
 
 # ── EXCEL ─────────────────────────────────────────────────────────────────────
-def cel(ws, f, c, v, bold=False, bg=None, halign="left", color="000000", merge_end=None):
+def _logo_image():
+    from openpyxl.drawing.image import Image as XLImage
     try:
-        cell = ws.cell(f, c, v)
-        cell.font = Font(bold=bold, name="Calibri", size=11, color=color)
-        cell.alignment = Alignment(horizontal=halign, vertical="center", wrap_text=True)
-        if bg: cell.fill = PatternFill("solid", fgColor=bg)
-        if merge_end: ws.merge_cells(start_row=f, start_column=c, end_row=merge_end[0], end_column=merge_end[1])
-        return cell
+        data = base64.b64decode(LOGO_B64)
+        img = XLImage(io.BytesIO(data))
+        img.width = 130
+        img.height = 46
+        return img
     except Exception as e:
-        logger.warning("cel error: " + str(e))
-        return ws.cell(f, c, str(v) if v else "")
+        logger.warning("No se pudo cargar el logo: " + str(e))
+        return None
+
+HERR_FILAS = ["Cinturon y Linea de Vida","Casco","Escalera de 24 pies","Escalera de 28 pies","Escalera de 32 pies","Conos reflectivos","Caja para herramientas","Juego de destornilladores","Martillo mediano","Estiletes","Cortafrio","Alicate","Llave francesa","Juego de rachet","Pares de guantes aislantes","Tecle","Machete","Cizalla","Pata de cabra","Flejadora (Maquina Eriband)","Extension con foco","Motosierra","Tijeras metalicas","Arco de sierra","Binoculares","Parasol","Remolque / Carrete para F.O."]
+EQUI_FILAS = ["Fusionadora","Cortadora de fibra","Bobina de lanzamiento","OTDR con cargador","Llave Acsys","GPS","Inversor","Etiquetadora"]
+MATE_FILAS = ["Fibra 48h (500mt)","Mangas de 48h y/o 144h (2 minimo)","Rollo de cinta Eriband 3/4","Hebillas para cinta Eriband 3/4","Hojas de sierra","Patchcord de fibra","Adaptadores (Simplex-Duplex)","Paquetes de amarras","Mesas plasticas","Sillas plasticas","Cuchillos","Poleas","Sogas de nylon medianas","Sogas de nylon gruesas","Repelente contra insectos","Repelente contra abejas y avispas"]
+
+SOLUCIONES = {
+    "HERRAJES EN MAL ESTADO.":"REALIZAR EL REEMPLAZO INMEDIATO DEL HERRAJE AFECTADO.",
+    "FALTA DE HERRAJES.":"INSTALAR LOS HERRAJES CONFORME A LA NORMATIVA TECNICA.",
+    "POSTES EN MAL ESTADO.":"DOCUMENTAR Y REPORTAR PARA GESTIONAR EL REEMPLAZO DEL POSTE.",
+    "POSTE(S) CAMBIADO(S).":"INSTALAR LOS HERRAJES NECESARIOS Y ASEGURAR EL CABLE AL NUEVO POSTE.",
+    "POSTES POR INSTALAR.":"DOCUMENTAR LA UBICACION Y REPORTAR PARA COORDINAR LA INSTALACION.",
+    "POSTE NUEVO INSTALADO - TN.":"DOCUMENTAR Y ETIQUETAR CON CODIGO DE IDENTIFICACION.",
+    "POSTE NUEVO INSTALADO - EMPRESAS ELECTRICAS.":"DOCUMENTAR Y COLOCAR ETIQUETA ACRILICA.",
+    "POSTES INCLINADOS.":"DOCUMENTAR Y REPORTAR PARA GESTIONAR EL APLOME DEL POSTE.",
+    "RETENIDA(S) EN MAL ESTADO.":"DOCUMENTAR Y REPORTAR PARA GESTIONAR LA CORRECCION.",
+    "RETENIDA(S) CORTADA(S).":"DOCUMENTAR Y REPORTAR PARA GESTIONAR LA CORRECCION.",
+    "VANOS POR RETEMPLAR.":"REALIZAR EL RETEMPLADO DEL CABLE PARA RESTABLECER LA TENSION.",
+    "MANGAS SUELTAS.":"ASEGURAR LA MANGA AL POSTE EN CONFIGURACION TIPO FIGURA 8.",
+    "MANGAS ABIERTAS/DANADAS.":"REEMPLAZAR TAPAS Y SELLOS GARANTIZANDO EL CIERRE HERMETICO.",
+    "RESERVAS SUELTAS.":"REORGANIZAR Y ASEGURAR LA RESERVA EN FIGURA 8.",
+    "CRUCES DE VIAS BAJOS.":"AJUSTAR LA ALTURA DEL CABLE A LA DISTANCIA REGLAMENTARIA.",
+    "VEGETACION SOBRE FIBRA/MANGA.":"REALIZAR LA PODA O RETIRO DE VEGETACION QUE COMPROMETA LA INTEGRIDAD DEL CABLE.",
+    "LOCALIZACION DE MANGA.":"DOCUMENTAR LA UBICACION MEDIANTE COORDENADAS GPS.",
+    "DOCUMENTACION UNIFILAR DE HILOS.":"DOCUMENTAR O SOLICITAR PROGRAMACION; UTILIZAR SEGUIDOR DE SENAL.",
+    "LINEA ELECTRICA EN MAL ESTADO.":"DOCUMENTAR Y SOLICITAR REPORTE AL AREA DE REGULATORIO.",
+    "REGENERACION URBANA.":"ESTABLECER CONTACTO CON EL CONSORCIO Y COORDINAR MEDIDAS.",
+    "AMPLIACION DE VIA.":"DOCUMENTAR Y COORDINAR MEDIDAS DE MITIGACION CON EL COORDINADOR DE FO.",
+    "CABLE LASTIMADO.":"DOCUMENTAR E INFORMAR PARA PROGRAMAR EL CAMBIO DEL TRAMO.",
+    "FIBRA INSTALADA INCORRECTAMENTE SOBRE MORDAZA.":"CORREGIR LA INSTALACION CONFORME A LA NORMATIVA TECNICA.",
+    "POZO SIN TAPA O EN MAL ESTADO.":"SOLICITAR TRABAJOS DE OBRA CIVIL PARA SU CORRECCION.",
+    "REPINTADO DE POZO.":"REALIZAR EL PINTADO DEL POZO TELCONET CON EL CODIGO ASIGNADO POR GIS.",
+    "REPINTADO DE POSTE.":"REALIZAR EL PINTADO DEL POSTE TELCONET CON EL CODIGO ASIGNADO POR GIS.",
+    "ELEMENTOS SIN ETIQUETAS ACRILICAS.":"VERIFICAR Y COLOCAR ETIQUETA ACRILICA CON EL CODIGO DE RUTA.",
+    "RIESGO DE DERRUMBE O DESLAVE.":"DOCUMENTAR Y SOLICITAR REUBICACION DEL RECORRIDO DEL CABLE.",
+    "RIESGO DE INUNDACIONES.":"DOCUMENTAR Y SOLICITAR REUBICACION DEL RECORRIDO DEL CABLE.",
+    "RIESGO DE INCENDIO.":"DOCUMENTAR Y SOLICITAR REUBICACION DEL RECORRIDO DEL CABLE.",
+    "NO SE REGISTRAN NOVEDADES DURANTE LA INSPECCION.":"NO SE ENCUENTRAN NOVEDADES QUE SIGNIFIQUEN RIESGOS EN EL CABLE DE LA RED INTERURBANO.",
+}
+
+# ── Bordes ─────────────────────────────────────────────────────────────────────
+_THIN = Side(style="thin", color="FF000000")
+_BORDE = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
+
+def _hdr(ws, fila, col_ini, col_fin, texto, fg=AZUL, color=BLANCO, bold=True, size=11):
+    from openpyxl.styles import Alignment
+    if col_fin > col_ini:
+        ws.merge_cells(start_row=fila, start_column=col_ini, end_row=fila, end_column=col_fin)
+    for cc in range(col_ini, col_fin+1):
+        cell = ws.cell(fila, cc)
+        cell.border = _BORDE
+    c = ws.cell(fila, col_ini, texto)
+    c.font = Font(bold=bold, name="Calibri", size=size, color=color)
+    c.fill = PatternFill("solid", fgColor=fg)
+    c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    return c
+
+def _lbl(ws, fila, col, texto, bg=GRIS2, bold=True):
+    from openpyxl.styles import Alignment
+    c = ws.cell(fila, col, texto)
+    c.font = Font(bold=bold, name="Calibri", size=11, color="000000")
+    if bg: c.fill = PatternFill("solid", fgColor=bg)
+    c.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    c.border = _BORDE
+    return c
+
+def _val(ws, fila, col_ini, col_fin, texto, bold=False):
+    from openpyxl.styles import Alignment
+    if col_fin > col_ini:
+        ws.merge_cells(start_row=fila, start_column=col_ini, end_row=fila, end_column=col_fin)
+    for cc in range(col_ini, col_fin+1):
+        cell = ws.cell(fila, cc)
+        cell.border = _BORDE
+    c = ws.cell(fila, col_ini, texto)
+    c.font = Font(bold=bold, name="Calibri", size=11, color="000000")
+    c.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    return c
 
 def generar_excel(datos):
     r   = datos["recorrido"]
@@ -139,137 +217,177 @@ def generar_excel(datos):
     nch = datos["mpriu"].get("novedades_check", {})
     wb  = Workbook()
 
-    # HOJA 1
-    ws1 = wb.active; ws1.title = "REPORTES_DE_RECORRIDOS"
-    ws1.column_dimensions["A"].width = 41; ws1.column_dimensions["B"].width = 35
-    ws1.column_dimensions["C"].width = 32; ws1.column_dimensions["D"].width = 30
+    # ══ HOJA 1: REPORTES_DE_RECORRIDOS ════════════════════════════════
+    ws1 = wb.active
+    ws1.title = "REPORTES_DE_RECORRIDOS"
+    ws1.column_dimensions["A"].width = 41
+    ws1.column_dimensions["B"].width = 35
+    ws1.column_dimensions["C"].width = 32
+    ws1.column_dimensions["D"].width = 30
     ws1.row_dimensions[2].height = 57
-    cel(ws1,2,2,"REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",bold=True,bg=AZUL,color=BLANCO,halign="center",merge_end=(2,3))
-    cel(ws1,2,4,"Codigo: FOR FO 02 Version: 3 (28/05/2021)",bold=True)
+    img = _logo_image()
+    if img: ws1.add_image(img, "A2")
+    _hdr(ws1, 2, 2, 3, "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS")
+    _val(ws1, 2, 4, 4, "Codigo: FOR FO 02 Version: 3 (28/05/2021)", bold=True)
     ws1.row_dimensions[4].height = 24
-    cel(ws1,4,1,"REPORTE DE RECORRIDO DE RUTAS INTERURBANAS DE F. O.",bold=True,bg=AZUL,color=BLANCO,halign="center",merge_end=(4,4))
+    _hdr(ws1, 4, 1, 4, "REPORTE DE RECORRIDO DE RUTAS INTERURBANAS DE F. O.")
     ws1.row_dimensions[5].height = 38; ws1.row_dimensions[6].height = 38
     ws1.merge_cells(start_row=5,start_column=1,end_row=6,end_column=1)
-    cel(ws1,5,1,"FECHA Y HORA DEL RECORRIDO",bold=True,bg=GRIS,halign="center")
-    cel(ws1,5,2,"FECHA",bold=True); cel(ws1,5,3,"HORA INICIO",bold=True); cel(ws1,5,4,"HORA FIN",bold=True)
-    cel(ws1,6,2,r.get("fecha","")); cel(ws1,6,3,r.get("hora_inicio","")); cel(ws1,6,4,r.get("hora_fin",""))
+    for fr in (5,6): ws1.cell(fr,1).border = _BORDE
+    _lbl(ws1, 5, 1, "FECHA Y HORA DEL RECORRIDO", bg=GRIS)
+    ws1.cell(5,1).alignment = ws1.cell(5,1).alignment.copy(horizontal="center")
+    _lbl(ws1, 5, 2, "FECHA"); _lbl(ws1, 5, 3, "HORA INICIO"); _lbl(ws1, 5, 4, "HORA FIN")
+    _val(ws1, 6, 2, 2, r.get("fecha","")); _val(ws1, 6, 3, 3, r.get("hora_inicio","")); _val(ws1, 6, 4, 4, r.get("hora_fin",""))
     for i,(label,valor) in enumerate([("NOMBRE DE LA RUTA",r.get("nombre_ruta","")),("CODIGO DE CUADRILLA",r.get("codigo_cuadrilla","")),("NODO INICIAL",r.get("nodo_inicial",""))]):
         f=7+i; ws1.row_dimensions[f].height=38
-        cel(ws1,f,1,label,bold=True,bg=GRIS2); cel(ws1,f,2,valor,bold=True,merge_end=(f,4))
+        _lbl(ws1, f, 1, label); _val(ws1, f, 2, 4, valor, bold=True)
     fila=10
     for nov in r.get("novedades",[]):
         num=str(nov.get("numero",""))
         ws1.row_dimensions[fila].height=38
         ws1.merge_cells(start_row=fila,start_column=1,end_row=fila+1,end_column=1)
-        cel(ws1,fila,1,"FECHA Y HORA NOVEDAD # "+num,bold=True,bg=GRIS,halign="center")
-        cel(ws1,fila,2,"FECHA",bold=True); cel(ws1,fila,3,"HORA INICIO",bold=True); cel(ws1,fila,4,"HORA FIN",bold=True)
+        for fr in (fila, fila+1): ws1.cell(fr,1).border = _BORDE
+        _lbl(ws1, fila, 1, "FECHA Y HORA NOVEDAD # "+num, bg=GRIS)
+        ws1.cell(fila,1).alignment = ws1.cell(fila,1).alignment.copy(horizontal="center")
+        _lbl(ws1, fila, 2, "FECHA"); _lbl(ws1, fila, 3, "HORA INICIO"); _lbl(ws1, fila, 4, "HORA FIN")
         fila+=1; ws1.row_dimensions[fila].height=38
-        cel(ws1,fila,2,nov.get("fecha","")); cel(ws1,fila,3,nov.get("hora_inicio","")); cel(ws1,fila,4,nov.get("hora_fin",""))
+        _val(ws1, fila, 2, 2, nov.get("fecha","")); _val(ws1, fila, 3, 3, nov.get("hora_inicio","")); _val(ws1, fila, 4, 4, nov.get("hora_fin",""))
         fila+=1
         for label,key in [("MOTIVO APARENTE DE LA NOVEDAD","motivo"),("REMEDIO DEFINITIVO A LA NOVEDAD","remedio"),("TAREA PENDIENTE","tarea_pendiente"),("COORDENADAS","coordenadas")]:
             ws1.row_dimensions[fila].height=42
-            cel(ws1,fila,1,label,bold=True,bg=GRIS3); cel(ws1,fila,2,nov.get(key,""),merge_end=(fila,4)); fila+=1
+            _lbl(ws1, fila, 1, label, bg=GRIS3); _val(ws1, fila, 2, 4, nov.get(key,"")); fila+=1
     for label,valor in [("NODO FINAL",r.get("nodo_final","")),("LIDER DE CUADRILLA QUE ELABORA INFORME",r.get("lider","")),("AYUDANTE TECNICO",r.get("ayudante","")),("COORDINADOR FIBRA OPTICA",r.get("coordinador","")),("FOTOS ANEXAS AL REPORTE",str(r.get("fotos_total",0))),("OBSERVACIONES GENERALES",r.get("observaciones",""))]:
         ws1.row_dimensions[fila].height=38
-        cel(ws1,fila,1,label,bold=True,bg=GRIS2); cel(ws1,fila,2,valor,merge_end=(fila,4)); fila+=1
+        _lbl(ws1, fila, 1, label); _val(ws1, fila, 2, 4, valor); fila+=1
 
-    # HOJA 2
+    # ══ HOJA 2: FOTOS_ANEXAS_AL_REPORTE ════════════════════════════════
     ws2=wb.create_sheet("FOTOS_ANEXAS_AL_REPORTE")
     ws2.column_dimensions["B"].width=20; ws2.column_dimensions["C"].width=59; ws2.column_dimensions["D"].width=24
-    cel(ws2,2,3,"REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS",bold=True,bg=AZUL,color=BLANCO,halign="center",merge_end=(2,4))
-    cel(ws2,4,2,"FOTOS DE LAS ACCIONES CORRECTIVAS",bold=True,bg=AZUL,color=BLANCO,halign="center",merge_end=(4,5))
-    cel(ws2,7,2,"NODO INICIO RECORRIDO",bold=True); cel(ws2,7,3,"FOTO",bold=True,bg=AZUL,color=BLANCO,halign="center"); cel(ws2,7,4,"NOMBRE DEL NODO",bold=True,bg=AZUL,color=BLANCO,halign="center",merge_end=(7,5))
-    ws2.row_dimensions[8].height=315; cel(ws2,8,3,"[FOTO NODO INICIO]"); cel(ws2,8,4,r.get("nodo_inicial",""),bold=True,merge_end=(8,5))
+    ws2.row_dimensions[2].height=57
+    img2 = _logo_image()
+    if img2: ws2.add_image(img2, "A2")
+    _hdr(ws2, 2, 3, 4, "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS")
+    _val(ws2, 2, 5, 5, "Codigo: FOR FO 02 Version: 3 (28/05/2021)", bold=True)
+    ws2.row_dimensions[4].height = 30
+    _hdr(ws2, 4, 2, 5, "FOTOS DE LAS ACCIONES CORRECTIVAS")
+    _lbl(ws2, 7, 2, "NODO INICIO RECORRIDO", bg=None)
+    _hdr(ws2, 7, 3, 3, "FOTO")
+    _hdr(ws2, 7, 4, 5, "NOMBRE DEL NODO")
+    ws2.row_dimensions[8].height = 200
+    _val(ws2, 8, 3, 3, "[FOTO NODO INICIO]")
+    _val(ws2, 8, 4, 5, r.get("nodo_inicial",""), bold=True)
     f2=10
     for nov in r.get("novedades",[]):
-        cel(ws2,f2,2,"NOVEDAD # "+str(nov.get("numero","")),bold=True)
-        cel(ws2,f2,3,"ANTES DEL MANTENIMIENTO",bold=True,bg=AZUL,color=BLANCO,halign="center")
-        cel(ws2,f2,4,"DESPUES DEL MANTENIMIENTO",bold=True,bg=AZUL,color=BLANCO,halign="center",merge_end=(f2,5))
-        f2+=1; ws2.row_dimensions[f2].height=315
-        cel(ws2,f2,3,"[FOTO ANTES]"); cel(ws2,f2,4,"[FOTO DESPUES]",merge_end=(f2,5)); f2+=2
-    cel(ws2,f2,2,"NODO FINAL DEL RECORRIDO",bold=True); cel(ws2,f2,3,"FOTO",bold=True,bg=AZUL,color=BLANCO,halign="center"); cel(ws2,f2,4,r.get("nodo_final",""),bold=True,merge_end=(f2,5))
+        _lbl(ws2, f2, 2, "NOVEDAD # "+str(nov.get("numero","")), bg=None)
+        _hdr(ws2, f2, 3, 3, "ANTES DEL MANTENIMIENTO")
+        _hdr(ws2, f2, 4, 5, "DESPUES DEL MANTENIMIENTO")
+        f2+=1; ws2.row_dimensions[f2].height=200
+        _val(ws2, f2, 3, 3, "[FOTO ANTES]"); _val(ws2, f2, 4, 5, "[FOTO DESPUES]"); f2+=2
+    _lbl(ws2, f2, 2, "NODO FINAL DEL RECORRIDO", bg=None)
+    _hdr(ws2, f2, 3, 3, "FOTO")
+    _val(ws2, f2, 4, 5, r.get("nodo_final",""), bold=True)
 
-    # HOJA 3
+    # ══ HOJA 3: MANGAS ════════════════════════════════════════════════
     ws3=wb.create_sheet("MANGAS")
     ws3.column_dimensions["B"].width=25; ws3.column_dimensions["C"].width=35; ws3.column_dimensions["D"].width=25; ws3.column_dimensions["E"].width=35
-    cel(ws3,2,3,"REPORTE DE RECORRIDOS",bold=True,bg=AZUL,color=BLANCO,halign="center",merge_end=(2,4))
-    cel(ws3,4,2,"FOTOS DE LAS MANGAS DESDE EL NODO A AL B",bold=True,bg="00133A",color=BLANCO,halign="center",merge_end=(4,5))
+    ws3.row_dimensions[2].height=57
+    img3 = _logo_image()
+    if img3: ws3.add_image(img3, "A2")
+    _hdr(ws3, 2, 3, 4, "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS")
+    ws3.row_dimensions[4].height = 30
+    _hdr(ws3, 4, 2, 5, "FOTOS DE LAS MANGAS DESDE EL NODO A AL B", fg="00133A")
     mangas=datos.get("mangas",[]); f3=6
-    if not mangas: cel(ws3,f3,2,"SIN CAMBIO DE MANGAS EN ESTE RECORRIDO")
+    if not mangas: _val(ws3, f3, 2, 2, "SIN CAMBIO DE MANGAS EN ESTE RECORRIDO")
     else:
         for i in range(0,len(mangas),2):
             m1=mangas[i]; m2=mangas[i+1] if i+1<len(mangas) else {}
-            ws3.row_dimensions[f3].height=315; cel(ws3,f3,3,"[FOTO MANGA]"); cel(ws3,f3,5,"[FOTO MANGA]"); f3+=1
+            ws3.row_dimensions[f3].height=180
+            _val(ws3, f3, 3, 3, "[FOTO MANGA]"); _val(ws3, f3, 5, 5, "[FOTO MANGA]"); f3+=1
             for label,k in [("NOMBRE:","nombre"),("DERIVACION:","derivacion"),("COORDENADAS:","coordenadas"),("OBSERVACION:","observacion")]:
-                cel(ws3,f3,2,label,bold=True,bg="1F4E79",color=BLANCO); cel(ws3,f3,3,m1.get(k,""))
-                cel(ws3,f3,4,label,bold=True,bg="1F4E79",color=BLANCO); cel(ws3,f3,5,m2.get(k,"")); f3+=1
+                _hdr(ws3, f3, 2, 2, label, fg="1F4E79", size=10)
+                _val(ws3, f3, 3, 3, m1.get(k,""))
+                _hdr(ws3, f3, 4, 4, label, fg="1F4E79", size=10)
+                _val(ws3, f3, 5, 5, m2.get(k,"")); f3+=1
 
-    # HOJA 4
+    # ══ HOJA 4: INVENTARIO DE HILOS EN NODO ═══════════════════════════
     ws4=wb.create_sheet("INVENTARIO DE HILOS EN NODO")
     ws4.column_dimensions["A"].width=10; ws4.column_dimensions["B"].width=14; ws4.column_dimensions["C"].width=45
-    cel(ws4,2,3,"REPORTE DE RECORRIDOS",bold=True,bg=AZUL,color=BLANCO,halign="center",merge_end=(2,6))
-    cel(ws4,3,1,"NODO: ",bold=True); cel(ws4,3,3,r.get("nodo_final",""))
-    cel(ws4,4,1,"NOMBRE ODF DE RUTA:",bold=True); cel(ws4,4,3,datos["hilos"].get("posicion_odf",""))
+    ws4.row_dimensions[2].height=57
+    img4 = _logo_image()
+    if img4: ws4.add_image(img4, "A2")
+    _hdr(ws4, 2, 3, 6, "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS")
+    _lbl(ws4, 4, 1, "NODO: ", bg=None); _val(ws4, 4, 3, 3, r.get("nodo_final",""))
+    _lbl(ws4, 5, 1, "NOMBRE ODF DE RUTA:", bg=None); _val(ws4, 5, 3, 3, datos["hilos"].get("posicion_odf",""))
     for col,txt in [(2,"PAR"),(3,"HILO"),(4,"NOMENCLATURA"),(5,"RACK #")]:
-        cel(ws4,6,col,txt,bold=True,bg=AZUL2,color=BLANCO,halign="center")
-    f4=7; hilos=datos["hilos"].get("filas",[])
-    if not hilos: cel(ws4,f4,2,"SIN CAMBIOS EN ODF EN ESTE RECORRIDO")
+        _hdr(ws4, 7, col, col, txt, fg=AZUL2, size=10)
+    f4=8; hilos=datos["hilos"].get("filas",[])
+    if not hilos: _val(ws4, f4, 2, 2, "SIN CAMBIOS EN ODF EN ESTE RECORRIDO")
     else:
         for h in hilos:
-            cel(ws4,f4,2,h.get("hilo_par","")); cel(ws4,f4,4,h.get("descripcion","")); cel(ws4,f4,5,h.get("estado","")); f4+=1
+            _val(ws4, f4, 2, 2, h.get("hilo_par","")); _val(ws4, f4, 4, 4, h.get("descripcion","")); _val(ws4, f4, 5, 5, h.get("estado","")); f4+=1
 
-    # HOJA 5
+    # ══ HOJA 5: Checklist CIU ══════════════════════════════════════════
     ws5=wb.create_sheet("Checklist CIU")
     for col,w in [("A",9),("B",26),("C",11),("D",21),("E",11),("F",14),("G",11),("H",14)]: ws5.column_dimensions[col].width=w
     ws5.row_dimensions[2].height=46
-    cel(ws5,2,2,"CHECKLIST CUADRILLA INTERURBANA",bold=True,bg=AZUL,color=BLANCO,halign="center",merge_end=(2,7))
-    cel(ws5,2,8,"Codigo: FOR FO 05",bold=True)
-    cel(ws5,3,2,"Fecha del Recorrido",bold=True); cel(ws5,3,3,r.get("fecha",""))
-    cel(ws5,3,5,"Hora Inicio",bold=True); cel(ws5,3,6,r.get("hora_inicio",""))
-    cel(ws5,3,7,"Hora Fin",bold=True); cel(ws5,3,8,r.get("hora_fin",""))
+    img5 = _logo_image()
+    if img5: ws5.add_image(img5, "A2")
+    _hdr(ws5, 2, 2, 7, "CHECKLIST CUADRILLA INTERURBANA")
+    _val(ws5, 2, 8, 8, "Codigo: FOR FO 05 Version: 3", bold=True)
+    _lbl(ws5, 3, 2, "Fecha del Recorrido", bg=None); _val(ws5, 3, 3, 3, r.get("fecha",""))
+    _lbl(ws5, 3, 5, "Hora Inicio", bg=None); _val(ws5, 3, 6, 6, r.get("hora_inicio",""))
+    _lbl(ws5, 3, 7, "Hora Fin", bg=None); _val(ws5, 3, 8, 8, r.get("hora_fin",""))
     f5=4
     for label,valor in [("Nombre de Ruta",r.get("nombre_ruta","")),("Nodo Inicio",r.get("nodo_inicial","")),("Nodo Final",r.get("nodo_final","")),("Distancia",ciu.get("distancia_ruta","")),("Lider de Cuadrilla",r.get("lider","")),("Vehiculo Placa",ciu.get("vehiculo_placa","")),("Coordinador",r.get("coordinador",""))]:
-        cel(ws5,f5,2,label,bold=True); cel(ws5,f5,3,valor,merge_end=(f5,8)); f5+=1
-    for sec,items,data_s in [("HERRAMIENTAS Y EPP",HERR,ciu.get("herramientas",{})),("EQUIPOS ELECTRONICOS",EQUI,ciu.get("equipos",{})),("MATERIALES E INSUMOS",MATE,ciu.get("materiales",{}))]:
-        cel(ws5,f5,2,sec,bold=True,bg=AZUL2,color=BLANCO,halign="center",merge_end=(f5,3))
-        cel(ws5,f5,4,"CANTIDAD",bold=True,bg=AZUL2,color=BLANCO,halign="center")
-        cel(ws5,f5,5,"OBSERVACIONES",bold=True,bg=AZUL2,color=BLANCO,halign="center",merge_end=(f5,8)); f5+=1
+        _lbl(ws5, f5, 2, label, bg=None); _val(ws5, f5, 3, 8, valor); f5+=1
+    for sec,items,data_s in [("HERRAMIENTAS Y EPP",HERR_FILAS,ciu.get("herramientas",{})),("EQUIPOS ELECTRONICOS",EQUI_FILAS,ciu.get("equipos",{})),("MATERIALES E INSUMOS",MATE_FILAS,ciu.get("materiales",{}))]:
+        _hdr(ws5, f5, 2, 3, sec, fg=AZUL2)
+        _hdr(ws5, f5, 4, 4, "CANTIDAD", fg=AZUL2)
+        _hdr(ws5, f5, 5, 8, "OBSERVACIONES", fg=AZUL2); f5+=1
         for nombre in items:
             info=data_s.get(nombre,{})
             cant=info.get("cantidad",0) if isinstance(info,dict) else int(info or 0)
             obs=info.get("obs","NINGUNA") if isinstance(info,dict) else ("BUEN ESTADO" if cant>0 else "NINGUNA")
-            cel(ws5,f5,2,nombre); cel(ws5,f5,4,cant,halign="center")
-            bg_o=VERDE if obs=="BUEN ESTADO" else (ROJO if obs=="MAL ESTADO" else "808080")
-            cel(ws5,f5,5,obs,bg=bg_o,color=BLANCO,halign="center",merge_end=(f5,8)); f5+=1
+            _val(ws5, f5, 2, 2, nombre)
+            ws5.cell(f5,4,cant).alignment = ws5.cell(f5,2).alignment.copy(horizontal="center")
+            ws5.cell(f5,4).border = _BORDE
+            bg_o = VERDE if obs=="BUEN ESTADO" else (ROJO if obs=="MAL ESTADO" else "808080")
+            _hdr(ws5, f5, 5, 8, obs, fg=bg_o, bold=False); f5+=1
 
-    # HOJA 6
+    # ══ HOJA 6: Checklists MPRIU ═══════════════════════════════════════
     ws6=wb.create_sheet("Checklists MPRIU")
     for col,w in [("A",9),("B",26),("C",11),("D",32),("E",11),("F",14),("G",11),("H",14)]: ws6.column_dimensions[col].width=w
     ws6.row_dimensions[2].height=46
-    cel(ws6,2,2,"CHECKLIST DE RECORRIDO DE MANTENIMIENTO PREVENTIVO DE RUTAS INTERURBANAS",bold=True,bg=AZUL,color=BLANCO,halign="center",merge_end=(2,7))
-    cel(ws6,2,8,"Codigo: FOR FO 08",bold=True)
-    cel(ws6,3,2,"Fecha del Recorrido",bold=True); cel(ws6,3,3,r.get("fecha",""))
-    cel(ws6,3,5,"Hora Inicio",bold=True); cel(ws6,3,6,r.get("hora_inicio",""))
-    cel(ws6,3,7,"Hora Fin",bold=True); cel(ws6,3,8,r.get("hora_fin",""))
+    img6 = _logo_image()
+    if img6: ws6.add_image(img6, "A2")
+    _hdr(ws6, 2, 2, 7, "CHECKLIST DE RECORRIDO DE MANTENIMIENTO PREVENTIVO DE RUTAS INTERURBANAS")
+    _val(ws6, 2, 8, 8, "Codigo: FOR FO 08 Version: 02", bold=True)
+    _lbl(ws6, 3, 2, "Fecha del Recorrido", bg=None); _val(ws6, 3, 3, 3, r.get("fecha",""))
+    _lbl(ws6, 3, 5, "Hora Inicio", bg=None); _val(ws6, 3, 6, 6, r.get("hora_inicio",""))
+    _lbl(ws6, 3, 7, "Hora Fin", bg=None); _val(ws6, 3, 8, 8, r.get("hora_fin",""))
     f6=4
     for label,valor in [("Nombre de Ruta",r.get("nombre_ruta","")),("Nodo Inicio",r.get("nodo_inicial","")),("Nodo Final",r.get("nodo_final","")),("Distancia",ciu.get("distancia_ruta","")),("Lider de Cuadrilla",r.get("lider","")),("Vehiculo Placa",ciu.get("vehiculo_placa","")),("Coordinador",r.get("coordinador",""))]:
-        cel(ws6,f6,2,label,bold=True); cel(ws6,f6,3,valor,merge_end=(f6,8)); f6+=1
+        _lbl(ws6, f6, 2, label, bg=None); _val(ws6, f6, 3, 8, valor); f6+=1
     f6+=1
-    cel(ws6,f6,2,"NOVEDAD",bold=True,bg=AZUL2,color=BLANCO,halign="center")
-    cel(ws6,f6,3,"CHECK",bold=True,bg=AZUL2,color=BLANCO,halign="center")
-    cel(ws6,f6,4,"SOLUCION",bold=True,bg=AZUL2,color=BLANCO,halign="center",merge_end=(f6,7))
-    cel(ws6,f6,8,"CANTIDAD",bold=True,bg=AZUL2,color=BLANCO,halign="center"); f6+=1
-    SOLUCIONES={"HERRAJES EN MAL ESTADO.":"REALIZAR EL REEMPLAZO INMEDIATO DEL HERRAJE AFECTADO.","FALTA DE HERRAJES.":"INSTALAR LOS HERRAJES CONFORME A LA NORMATIVA TECNICA.","POSTES EN MAL ESTADO.":"DOCUMENTAR Y REPORTAR PARA GESTIONAR EL REEMPLAZO DEL POSTE.","POSTES INCLINADOS.":"DOCUMENTAR Y REPORTAR PARA GESTIONAR EL APLOME DEL POSTE.","VANOS POR RETEMPLAR.":"REALIZAR EL RETEMPLADO DEL CABLE PARA RESTABLECER LA TENSION.","MANGAS SUELTAS.":"ASEGURAR LA MANGA AL POSTE EN CONFIGURACION TIPO FIGURA 8.","MANGAS ABIERTAS/DANADAS.":"REEMPLAZAR TAPAS Y SELLOS GARANTIZANDO EL CIERRE HERMETICO.","RESERVAS SUELTAS.":"REORGANIZAR Y ASEGURAR LA RESERVA EN FIGURA 8.","CRUCES DE VIAS BAJOS.":"AJUSTAR LA ALTURA DEL CABLE A LA DISTANCIA REGLAMENTARIA.","VEGETACION SOBRE FIBRA/MANGA.":"REALIZAR LA PODA O RETIRO DE VEGETACION QUE COMPROMETA LA INTEGRIDAD DEL CABLE.","DOCUMENTACION UNIFILAR DE HILOS.":"DOCUMENTAR O SOLICITAR PROGRAMACION; UTILIZAR SEGUIDOR DE SENAL.","LINEA ELECTRICA EN MAL ESTADO.":"DOCUMENTAR Y SOLICITAR REPORTE AL AREA DE REGULATORIO.","CABLE LASTIMADO.":"DOCUMENTAR E INFORMAR PARA PROGRAMAR EL CAMBIO DEL TRAMO.","POZO SIN TAPA O EN MAL ESTADO.":"SOLICITAR TRABAJOS DE OBRA CIVIL PARA SU CORRECCION.","ELEMENTOS SIN ETIQUETAS ACRILICAS.":"VERIFICAR Y COLOCAR ETIQUETA ACRILICA CON EL CODIGO DE RUTA.","RIESGO DE DERRUMBE O DESLAVE.":"DOCUMENTAR Y SOLICITAR REUBICACION DEL RECORRIDO DEL CABLE.","RIESGO DE INUNDACIONES.":"DOCUMENTAR Y SOLICITAR REUBICACION DEL RECORRIDO DEL CABLE.","RIESGO DE INCENDIO.":"DOCUMENTAR Y SOLICITAR REUBICACION DEL RECORRIDO DEL CABLE.","NO SE REGISTRAN NOVEDADES DURANTE LA INSPECCION.":"NO SE ENCUENTRAN NOVEDADES QUE SIGNIFIQUEN RIESGOS EN EL CABLE DE LA RED INTERURBANO."}
+    _hdr(ws6, f6, 2, 2, "NOVEDAD", fg=AZUL2)
+    _hdr(ws6, f6, 3, 3, "CHECK", fg=AZUL2)
+    _hdr(ws6, f6, 4, 7, "SOLUCION", fg=AZUL2)
+    _hdr(ws6, f6, 8, 8, "CANTIDAD", fg=AZUL2); f6+=1
     for novedad in NOVEDADES_MPRIU:
         ws6.row_dimensions[f6].height=43
         info=nch.get(novedad,{}); tiene=info.get("check",False); cant=info.get("cantidad",0); chk="SI" if tiene else "NO"
         sol=SOLUCIONES.get(novedad,"DOCUMENTAR Y REPORTAR AL COORDINADOR.")
-        cel(ws6,f6,2,novedad); cel(ws6,f6,3,chk,bold=True,bg=(VERDE if tiene else ROJO),color=BLANCO,halign="center")
-        cel(ws6,f6,4,sol,merge_end=(f6,7)); cel(ws6,f6,8,cant if tiene else 0,halign="center"); f6+=1
+        _val(ws6, f6, 2, 2, novedad)
+        _hdr(ws6, f6, 3, 3, chk, fg=(VERDE if tiene else ROJO))
+        _val(ws6, f6, 4, 7, sol)
+        ws6.cell(f6,8,cant if tiene else 0).alignment = ws6.cell(f6,2).alignment.copy(horizontal="center")
+        ws6.cell(f6,8).border = _BORDE
+        f6+=1
     ws6.row_dimensions[f6].height=60
-    cel(ws6,f6,2,"Observaciones:",bold=True); cel(ws6,f6,3,r.get("observaciones",""),merge_end=(f6,8))
+    _lbl(ws6, f6, 2, "Observaciones:", bg=None); _val(ws6, f6, 3, 8, r.get("observaciones",""))
 
     buf=io.BytesIO(); wb.save(buf); buf.seek(0); return buf.read()
+
 
 def datos_vacios():
     return {
