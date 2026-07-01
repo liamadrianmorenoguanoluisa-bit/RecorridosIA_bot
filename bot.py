@@ -20,6 +20,11 @@ GEMINI_URL      = "https://generativelanguage.googleapis.com/v1beta/models/gemin
 USUARIOS_AUTENTICADOS = set()
 RUTAS_GUARDADAS = {}
 
+# MODO PRUEBA: solo se generan REPORTES_DE_RECORRIDOS y FOTOS_ANEXAS_AL_REPORTE.
+# Cuando estas 2 pestanas esten validadas, cambiar a True para reactivar
+# MANGAS, INVENTARIO DE HILOS EN NODO, Checklist CIU y Checklists MPRIU.
+GENERAR_HOJAS_EXTRA = False
+
 (ESPERANDO_TOTP, MENU_PRINCIPAL, NOMBRE_RUTA, CODIGO_CUADRILLA, NODO_INICIAL, NODO_FINAL,
  LIDER, AYUDANTE, COORDINADOR, PLACA, DISTANCIA,
  CIU_HERRAMIENTAS, CIU_EQUIPOS, CIU_MATERIALES,
@@ -145,6 +150,25 @@ def _logo_image():
     except Exception as e:
         logger.warning("No se pudo cargar el logo: " + str(e))
         return None
+
+def _insertar_foto_celda(ws, fila, col, img_bytes, ancho_px=255, alto_px=400):
+    """Inserta una foto (bytes JPEG/PNG) ajustada dentro de la celda foto, con pequeño margen."""
+    from openpyxl.drawing.image import Image as XLImage
+    from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
+    from openpyxl.drawing.xdr import XDRPositiveSize2D
+    from openpyxl.utils.units import pixels_to_EMU
+    if not img_bytes:
+        return
+    try:
+        img = XLImage(io.BytesIO(img_bytes))
+        img.width = ancho_px
+        img.height = alto_px
+        marker = AnchorMarker(col=col-1, colOff=pixels_to_EMU(4), row=fila-1, rowOff=pixels_to_EMU(4))
+        size = XDRPositiveSize2D(pixels_to_EMU(ancho_px), pixels_to_EMU(alto_px))
+        img.anchor = OneCellAnchor(_from=marker, ext=size)
+        ws.add_image(img)
+    except Exception as e:
+        logger.warning("No se pudo insertar foto en celda: " + str(e))
 
 def _insertar_logo_centrado(ws, fila, col_letra="A"):
     """Inserta el logo centrado dentro de la celda, con margen para que quede dentro del borde."""
@@ -342,7 +366,7 @@ def generar_excel(datos):
     _hdr(ws2, 2, 3, 4, "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS", fg="FFFFFF", color="000000", borde=_BORDE_GRUESO)
     _val(ws2, 2, 5, 5, "Código: FOR FO 02\nVersión: 3 (28/05/2021)", bold=True, borde=_BORDE_GRUESO)
     ws2.cell(2,1).border = _BORDE_GRUESO
-    ws2.row_dimensions[4].height = 24
+    ws2.row_dimensions[4].height = 18
     _hdr(ws2, 4, 2, 5, "FOTOS DE LAS ACCIONES CORRECTIVAS", borde=_BORDE_GRUESO)
     ws2.row_dimensions[5].height = 4
     ws2.row_dimensions[6].height = 4
@@ -359,6 +383,7 @@ def generar_excel(datos):
     ws2.row_dimensions[8].height = 315
     _val(ws2, 8, 3, 3, "", borde=_BORDE_GRUESO)
     _val(ws2, 8, 4, 5, r.get("nodo_inicial",""), bold=True, borde=_BORDE_GRUESO)
+    _insertar_foto_celda(ws2, 8, 3, r.get("nodo_inicial_foto"))
 
     f2=10
     for n_idx in range(1, 21):
@@ -372,6 +397,9 @@ def generar_excel(datos):
         _hdr(ws2, f2, 4, 5, "DESPU\u00c9S DEL MANTENIMIENTO", borde=_BORDE_GRUESO)
         f2+=1; ws2.row_dimensions[f2].height=315
         _val(ws2, f2, 3, 3, "", borde=_BORDE_GRUESO); _val(ws2, f2, 4, 5, "", borde=_BORDE_GRUESO)
+        if nov:
+            _insertar_foto_celda(ws2, f2, 3, nov.get("foto_antes"))
+            _insertar_foto_celda(ws2, f2, 4, nov.get("foto_despues"))
         f2+=2
 
     ws2.merge_cells(start_row=f2, start_column=2, end_row=f2+1, end_column=2)
@@ -385,140 +413,142 @@ def generar_excel(datos):
     ws2.row_dimensions[f2].height = 315
     _val(ws2, f2, 3, 3, "", borde=_BORDE_GRUESO)
     _val(ws2, f2, 4, 5, r.get("nodo_final",""), bold=True, borde=_BORDE_GRUESO)
+    _insertar_foto_celda(ws2, f2, 3, r.get("nodo_final_foto"))
     _marco_grueso(ws2, f2-1, 2, f2, 5)
 
-    # ══ HOJA 3: MANGAS — hasta 40 mangas (20 pares) ════════════════════
-    ws3=wb.create_sheet("MANGAS")
-    ws3.column_dimensions["A"].width=20
-    ws3.column_dimensions["B"].width=18; ws3.column_dimensions["C"].width=28; ws3.column_dimensions["D"].width=18; ws3.column_dimensions["E"].width=28
-    ws3.row_dimensions[2].height=60
-    ws3.cell(2,1).border = _BORDE
-    _insertar_logo_centrado(ws3, 2, "A")
-    _hdr(ws3, 2, 3, 4, "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS", fg="FFFFFF", color="000000")
-    _val(ws3, 2, 5, 5, "C\u00f3digo: FOR FO 02\nVersi\u00f3n: 3 (28/05/2021)", bold=True)
-    ws3.row_dimensions[4].height = 30
-    _hdr(ws3, 4, 2, 5, "FOTOS DE LAS MANGAS  DESDE EL NODO A AL B", fg="00133A")
-    mangas=datos.get("mangas",[])[:40]
-    f3=6
-    n_pares = max(20, (len(mangas)+1)//2)
-    for i in range(0, n_pares*2, 2):
-        m1 = mangas[i]   if i   < len(mangas) else {}
-        m2 = mangas[i+1] if i+1 < len(mangas) else {}
-        _hdr(ws3, f3, 2, 2, "NOMBRE:", fg="1F4E79", size=10)
-        _val(ws3, f3, 3, 3, m1.get("nombre",""))
-        _hdr(ws3, f3, 4, 4, "NOMBRE:", fg="1F4E79", size=10)
-        _val(ws3, f3, 5, 5, m2.get("nombre","")); f3+=1
-        ws3.row_dimensions[f3].height = 315
-        _val(ws3, f3, 3, 3, "")
-        _val(ws3, f3, 5, 5, ""); f3+=1
-        for label,k in [("DERIVACI\u00d3N:","derivacion"),("COORDENADAS:","coordenadas"),("OBSERVACI\u00d3N:","observacion")]:
-            _hdr(ws3, f3, 2, 2, label, fg="1F4E79", size=10)
-            _val(ws3, f3, 3, 3, m1.get(k,""))
-            _hdr(ws3, f3, 4, 4, label, fg="1F4E79", size=10)
-            _val(ws3, f3, 5, 5, m2.get(k,"")); f3+=1
-        f3 += 1
+    if GENERAR_HOJAS_EXTRA:
+        # ══ HOJA 3: MANGAS — hasta 40 mangas (20 pares) ════════════════════
+        ws3=wb.create_sheet("MANGAS")
+        ws3.column_dimensions["A"].width=20
+        ws3.column_dimensions["B"].width=18; ws3.column_dimensions["C"].width=28; ws3.column_dimensions["D"].width=18; ws3.column_dimensions["E"].width=28
+        ws3.row_dimensions[2].height=60
+        ws3.cell(2,1).border = _BORDE
+        _insertar_logo_centrado(ws3, 2, "A")
+        _hdr(ws3, 2, 3, 4, "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS", fg="FFFFFF", color="000000")
+        _val(ws3, 2, 5, 5, "C\u00f3digo: FOR FO 02\nVersi\u00f3n: 3 (28/05/2021)", bold=True)
+        ws3.row_dimensions[4].height = 30
+        _hdr(ws3, 4, 2, 5, "FOTOS DE LAS MANGAS  DESDE EL NODO A AL B", fg="00133A")
+        mangas=datos.get("mangas",[])[:40]
+        f3=6
+        n_pares = max(20, (len(mangas)+1)//2)
+        for i in range(0, n_pares*2, 2):
+            m1 = mangas[i]   if i   < len(mangas) else {}
+            m2 = mangas[i+1] if i+1 < len(mangas) else {}
+            _hdr(ws3, f3, 2, 2, "NOMBRE:", fg="1F4E79", size=10)
+            _val(ws3, f3, 3, 3, m1.get("nombre",""))
+            _hdr(ws3, f3, 4, 4, "NOMBRE:", fg="1F4E79", size=10)
+            _val(ws3, f3, 5, 5, m2.get("nombre","")); f3+=1
+            ws3.row_dimensions[f3].height = 315
+            _val(ws3, f3, 3, 3, "")
+            _val(ws3, f3, 5, 5, ""); f3+=1
+            for label,k in [("DERIVACI\u00d3N:","derivacion"),("COORDENADAS:","coordenadas"),("OBSERVACI\u00d3N:","observacion")]:
+                _hdr(ws3, f3, 2, 2, label, fg="1F4E79", size=10)
+                _val(ws3, f3, 3, 3, m1.get(k,""))
+                _hdr(ws3, f3, 4, 4, label, fg="1F4E79", size=10)
+                _val(ws3, f3, 5, 5, m2.get(k,"")); f3+=1
+            f3 += 1
 
-    # ══ HOJA 4: INVENTARIO DE HILOS — hasta 6 nodos x 48 hilos ════════
-    ws4=wb.create_sheet("INVENTARIO DE HILOS EN NODO")
-    ws4.column_dimensions["A"].width=20
-    ws4.column_dimensions["B"].width=8; ws4.column_dimensions["C"].width=30
-    ws4.column_dimensions["D"].width=4; ws4.column_dimensions["E"].width=10; ws4.column_dimensions["F"].width=10
-    ws4.row_dimensions[2].height=60
-    ws4.cell(2,1).border = _BORDE
-    _insertar_logo_centrado(ws4, 2, "A")
-    _hdr(ws4, 2, 3, 6, "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS", fg="FFFFFF", color="000000")
-    _val(ws4, 2, 7, 7, "Código: FOR FO 02\nVersión: 3 (28/05/2021)", bold=True)
+        # ══ HOJA 4: INVENTARIO DE HILOS — hasta 6 nodos x 48 hilos ════════
+        ws4=wb.create_sheet("INVENTARIO DE HILOS EN NODO")
+        ws4.column_dimensions["A"].width=20
+        ws4.column_dimensions["B"].width=8; ws4.column_dimensions["C"].width=30
+        ws4.column_dimensions["D"].width=4; ws4.column_dimensions["E"].width=10; ws4.column_dimensions["F"].width=10
+        ws4.row_dimensions[2].height=60
+        ws4.cell(2,1).border = _BORDE
+        _insertar_logo_centrado(ws4, 2, "A")
+        _hdr(ws4, 2, 3, 6, "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS", fg="FFFFFF", color="000000")
+        _val(ws4, 2, 7, 7, "Código: FOR FO 02\nVersión: 3 (28/05/2021)", bold=True)
 
-    hilos = datos["hilos"].get("filas", [])
-    # Si no hay hilos, igual mostramos el nodo principal vacio (1 nodo)
-    if not hilos:
-        _lbl(ws4, 4, 1, "NODO: ", bg=None); _val(ws4, 4, 3, 3, r.get("nodo_final",""))
-        _lbl(ws4, 5, 1, "NOMBRE ODF DE RUTA:", bg=None); _val(ws4, 5, 3, 3, datos["hilos"].get("posicion_odf",""))
-        _lbl(ws4, 6, 1, "TIPO DE FIBRA", bg=None); _val(ws4, 6, 3, 3, "48H 4 BUFFER")
-        _lbl(ws4, 7, 1, "CODIGO COLOR", bg=None); _val(ws4, 7, 3, 3, "INTERNACIONAL")
-        for col,txt in [(1,"PAR"),(2,"HILO"),(3,"NOMENCLATURA"),(5,"RACK #")]:
-            _val(ws4, 8, col, col, txt, bold=True)
-        _val(ws4, 9, 2, 2, "SIN CAMBIOS EN ODF EN ESTE RECORRIDO")
-    else:
-        # Particionar hilos en bloques de hasta 48 (1 nodo cada uno), hasta 6 nodos
-        BLOQUE = 48
-        bloques = [hilos[i:i+BLOQUE] for i in range(0, len(hilos), BLOQUE)] or [[]]
-        bloques = bloques[:6]
-        fila_n = 4
-        for bi, bloque in enumerate(bloques):
-            _lbl(ws4, fila_n, 1, "NODO: ", bg=None); _val(ws4, fila_n, 3, 3, r.get("nodo_final",""))
-            _lbl(ws4, fila_n+1, 1, "NOMBRE ODF DE RUTA:", bg=None); _val(ws4, fila_n+1, 3, 3, datos["hilos"].get("posicion_odf",""))
-            _lbl(ws4, fila_n+2, 1, "TIPO DE FIBRA", bg=None); _val(ws4, fila_n+2, 3, 3, "48H 4 BUFFER")
-            _lbl(ws4, fila_n+3, 1, "CODIGO COLOR", bg=None); _val(ws4, fila_n+3, 3, 3, "INTERNACIONAL")
+        hilos = datos["hilos"].get("filas", [])
+        # Si no hay hilos, igual mostramos el nodo principal vacio (1 nodo)
+        if not hilos:
+            _lbl(ws4, 4, 1, "NODO: ", bg=None); _val(ws4, 4, 3, 3, r.get("nodo_final",""))
+            _lbl(ws4, 5, 1, "NOMBRE ODF DE RUTA:", bg=None); _val(ws4, 5, 3, 3, datos["hilos"].get("posicion_odf",""))
+            _lbl(ws4, 6, 1, "TIPO DE FIBRA", bg=None); _val(ws4, 6, 3, 3, "48H 4 BUFFER")
+            _lbl(ws4, 7, 1, "CODIGO COLOR", bg=None); _val(ws4, 7, 3, 3, "INTERNACIONAL")
             for col,txt in [(1,"PAR"),(2,"HILO"),(3,"NOMENCLATURA"),(5,"RACK #")]:
-                _val(ws4, fila_n+4, col, col, txt, bold=True)
-            fh = fila_n + 5
-            for idx,h in enumerate(bloque):
-                par = idx // 2 + 1
-                if idx % 2 == 0:
-                    _val(ws4, fh, 1, 1, str(par))
-                _val(ws4, fh, 2, 2, str(idx+1))
-                _val(ws4, fh, 3, 3, h.get("descripcion",""))
-                fh+=1
-            fila_n = fh + 2
+                _val(ws4, 8, col, col, txt, bold=True)
+            _val(ws4, 9, 2, 2, "SIN CAMBIOS EN ODF EN ESTE RECORRIDO")
+        else:
+            # Particionar hilos en bloques de hasta 48 (1 nodo cada uno), hasta 6 nodos
+            BLOQUE = 48
+            bloques = [hilos[i:i+BLOQUE] for i in range(0, len(hilos), BLOQUE)] or [[]]
+            bloques = bloques[:6]
+            fila_n = 4
+            for bi, bloque in enumerate(bloques):
+                _lbl(ws4, fila_n, 1, "NODO: ", bg=None); _val(ws4, fila_n, 3, 3, r.get("nodo_final",""))
+                _lbl(ws4, fila_n+1, 1, "NOMBRE ODF DE RUTA:", bg=None); _val(ws4, fila_n+1, 3, 3, datos["hilos"].get("posicion_odf",""))
+                _lbl(ws4, fila_n+2, 1, "TIPO DE FIBRA", bg=None); _val(ws4, fila_n+2, 3, 3, "48H 4 BUFFER")
+                _lbl(ws4, fila_n+3, 1, "CODIGO COLOR", bg=None); _val(ws4, fila_n+3, 3, 3, "INTERNACIONAL")
+                for col,txt in [(1,"PAR"),(2,"HILO"),(3,"NOMENCLATURA"),(5,"RACK #")]:
+                    _val(ws4, fila_n+4, col, col, txt, bold=True)
+                fh = fila_n + 5
+                for idx,h in enumerate(bloque):
+                    par = idx // 2 + 1
+                    if idx % 2 == 0:
+                        _val(ws4, fh, 1, 1, str(par))
+                    _val(ws4, fh, 2, 2, str(idx+1))
+                    _val(ws4, fh, 3, 3, h.get("descripcion",""))
+                    fh+=1
+                fila_n = fh + 2
 
-    # ══ HOJA 5: Checklist CIU — SIN LOGO ════════════════════════════════
-    ws5=wb.create_sheet("Checklist CIU")
-    for col,w in [("A",9),("B",26),("C",11),("D",21),("E",11),("F",14),("G",11),("H",14)]: ws5.column_dimensions[col].width=w
-    ws5.row_dimensions[2].height=46
-    _hdr(ws5, 2, 2, 7, "CHECKLIST CUADRILLA INTERURBANA")
-    _val(ws5, 2, 8, 8, "C\u00f3digo: FOR FO 05\nVersi\u00f3n: 3 (26/06/2025)", bold=True)
-    _lbl(ws5, 4, 2, "Fecha del Recorrido", bg=None); _val(ws5, 4, 3, 4, r.get("fecha",""))
-    _lbl(ws5, 4, 5, "Hora Inicio", bg=None); _val(ws5, 4, 6, 6, r.get("hora_inicio",""))
-    _lbl(ws5, 4, 7, "Hora Fin", bg=None); _val(ws5, 4, 8, 8, r.get("hora_fin",""))
-    f5=5
-    for label,valor in [("Nombre de Ruta",r.get("nombre_ruta","")),("Nodo Inicio",r.get("nodo_inicial","")),("Nodo Final",r.get("nodo_final","")),("Distancia de la Ruta",ciu.get("distancia_ruta","")),("Lider de Cuadrilla",r.get("lider","")),("Veh\u00edculo Placa",ciu.get("vehiculo_placa","")),("Coordinador Fibra \u00d3ptica",r.get("coordinador",""))]:
-        _lbl(ws5, f5, 2, label, bg=None); _val(ws5, f5, 3, 8, valor); f5+=1
-    f5+=1
-    for sec,items,data_s in [("HERRAMIENTAS Y EPP",HERR_FILAS,ciu.get("herramientas",{})),("EQUIPOS ELECTRONICOS",EQUI_FILAS,ciu.get("equipos",{})),("MATERIALES E INSUMOS",MATE_FILAS,ciu.get("materiales",{}))]:
-        _hdr(ws5, f5, 2, 3, sec, fg=AZUL2)
-        _hdr(ws5, f5, 4, 4, "CANTIDAD", fg=AZUL2)
-        _hdr(ws5, f5, 5, 8, "OBSERVACIONES", fg=AZUL2); f5+=1
-        for nombre in items:
-            info=data_s.get(nombre,{})
-            cant=info.get("cantidad",0) if isinstance(info,dict) else int(info or 0)
-            obs=info.get("obs","NINGUNA") if isinstance(info,dict) else ("BUEN ESTADO" if cant>0 else "NINGUNA")
-            _val(ws5, f5, 2, 2, nombre)
-            ws5.cell(f5,4,cant).alignment = ws5.cell(f5,2).alignment.copy(horizontal="center")
-            ws5.cell(f5,4).border = _BORDE
-            bg_o = VERDE if obs=="BUEN ESTADO" else (ROJO if obs=="MAL ESTADO" else "808080")
-            _hdr(ws5, f5, 5, 8, obs, fg=bg_o, bold=False); f5+=1
+        # ══ HOJA 5: Checklist CIU — SIN LOGO ════════════════════════════════
+        ws5=wb.create_sheet("Checklist CIU")
+        for col,w in [("A",9),("B",26),("C",11),("D",21),("E",11),("F",14),("G",11),("H",14)]: ws5.column_dimensions[col].width=w
+        ws5.row_dimensions[2].height=46
+        _hdr(ws5, 2, 2, 7, "CHECKLIST CUADRILLA INTERURBANA")
+        _val(ws5, 2, 8, 8, "C\u00f3digo: FOR FO 05\nVersi\u00f3n: 3 (26/06/2025)", bold=True)
+        _lbl(ws5, 4, 2, "Fecha del Recorrido", bg=None); _val(ws5, 4, 3, 4, r.get("fecha",""))
+        _lbl(ws5, 4, 5, "Hora Inicio", bg=None); _val(ws5, 4, 6, 6, r.get("hora_inicio",""))
+        _lbl(ws5, 4, 7, "Hora Fin", bg=None); _val(ws5, 4, 8, 8, r.get("hora_fin",""))
+        f5=5
+        for label,valor in [("Nombre de Ruta",r.get("nombre_ruta","")),("Nodo Inicio",r.get("nodo_inicial","")),("Nodo Final",r.get("nodo_final","")),("Distancia de la Ruta",ciu.get("distancia_ruta","")),("Lider de Cuadrilla",r.get("lider","")),("Veh\u00edculo Placa",ciu.get("vehiculo_placa","")),("Coordinador Fibra \u00d3ptica",r.get("coordinador",""))]:
+            _lbl(ws5, f5, 2, label, bg=None); _val(ws5, f5, 3, 8, valor); f5+=1
+        f5+=1
+        for sec,items,data_s in [("HERRAMIENTAS Y EPP",HERR_FILAS,ciu.get("herramientas",{})),("EQUIPOS ELECTRONICOS",EQUI_FILAS,ciu.get("equipos",{})),("MATERIALES E INSUMOS",MATE_FILAS,ciu.get("materiales",{}))]:
+            _hdr(ws5, f5, 2, 3, sec, fg=AZUL2)
+            _hdr(ws5, f5, 4, 4, "CANTIDAD", fg=AZUL2)
+            _hdr(ws5, f5, 5, 8, "OBSERVACIONES", fg=AZUL2); f5+=1
+            for nombre in items:
+                info=data_s.get(nombre,{})
+                cant=info.get("cantidad",0) if isinstance(info,dict) else int(info or 0)
+                obs=info.get("obs","NINGUNA") if isinstance(info,dict) else ("BUEN ESTADO" if cant>0 else "NINGUNA")
+                _val(ws5, f5, 2, 2, nombre)
+                ws5.cell(f5,4,cant).alignment = ws5.cell(f5,2).alignment.copy(horizontal="center")
+                ws5.cell(f5,4).border = _BORDE
+                bg_o = VERDE if obs=="BUEN ESTADO" else (ROJO if obs=="MAL ESTADO" else "808080")
+                _hdr(ws5, f5, 5, 8, obs, fg=bg_o, bold=False); f5+=1
 
-    # ══ HOJA 6: Checklists MPRIU — SIN LOGO ════════════════════════════
-    ws6=wb.create_sheet("Checklists MPRIU")
-    for col,w in [("A",9),("B",26),("C",11),("D",32),("E",11),("F",14),("G",11),("H",14)]: ws6.column_dimensions[col].width=w
-    ws6.row_dimensions[2].height=46
-    _hdr(ws6, 2, 2, 7, "CHECKLIST DE RECORRIDO DE MANTENIMIENTO PREVENTIVO DE RUTAS INTERURBANAS")
-    _val(ws6, 2, 8, 8, "C\u00f3digo: FOR FO 08\nVersi\u00f3n: 02 (28/05/2021)", bold=True)
-    _lbl(ws6, 4, 2, "Fecha del Recorrido", bg=None); _val(ws6, 4, 3, 4, r.get("fecha",""))
-    _lbl(ws6, 4, 5, "Hora Inicio", bg=None); _val(ws6, 4, 6, 6, r.get("hora_inicio",""))
-    _lbl(ws6, 4, 7, "Hora  Fin", bg=None); _val(ws6, 4, 8, 8, r.get("hora_fin",""))
-    f6=5
-    for label,valor in [("Nombre de Ruta",r.get("nombre_ruta","")),("Nodo Inicio",r.get("nodo_inicial","")),("Nodo Final",r.get("nodo_final","")),("Distancia de la Ruta",ciu.get("distancia_ruta","")),("Lider de Cuadrilla",r.get("lider","")),("Veh\u00edculo Placa",ciu.get("vehiculo_placa","")),("Coordinador Fibra \u00d3ptica",r.get("coordinador",""))]:
-        _lbl(ws6, f6, 2, label, bg=None); _val(ws6, f6, 3, 8, valor); f6+=1
-    f6+=1
-    ws6.row_dimensions[f6].height=30
-    _hdr(ws6, f6, 2, 2, "NOVEDAD", fg=AZUL2)
-    _hdr(ws6, f6, 3, 3, "CHECK", fg=AZUL2)
-    _hdr(ws6, f6, 4, 7, "SOLUCI\u00d3N", fg=AZUL2)
-    _hdr(ws6, f6, 8, 8, "CANTIDAD", fg=AZUL2); f6+=1
-    for novedad in NOVEDADES_MPRIU:
-        ws6.row_dimensions[f6].height=43
-        info=nch.get(novedad,{}); tiene=info.get("check",False); cant=info.get("cantidad",0); chk="SI" if tiene else "NO"
-        sol=SOLUCIONES.get(novedad,"DOCUMENTAR Y REPORTAR AL COORDINADOR.")
-        _val(ws6, f6, 2, 2, novedad)
-        _hdr(ws6, f6, 3, 3, chk, fg=(VERDE if tiene else ROJO))
-        _val(ws6, f6, 4, 7, sol)
-        ws6.cell(f6,8,cant if tiene else 0).alignment = ws6.cell(f6,2).alignment.copy(horizontal="center")
-        ws6.cell(f6,8).border = _BORDE
+        # ══ HOJA 6: Checklists MPRIU — SIN LOGO ════════════════════════════
+        ws6=wb.create_sheet("Checklists MPRIU")
+        for col,w in [("A",9),("B",26),("C",11),("D",32),("E",11),("F",14),("G",11),("H",14)]: ws6.column_dimensions[col].width=w
+        ws6.row_dimensions[2].height=46
+        _hdr(ws6, 2, 2, 7, "CHECKLIST DE RECORRIDO DE MANTENIMIENTO PREVENTIVO DE RUTAS INTERURBANAS")
+        _val(ws6, 2, 8, 8, "C\u00f3digo: FOR FO 08\nVersi\u00f3n: 02 (28/05/2021)", bold=True)
+        _lbl(ws6, 4, 2, "Fecha del Recorrido", bg=None); _val(ws6, 4, 3, 4, r.get("fecha",""))
+        _lbl(ws6, 4, 5, "Hora Inicio", bg=None); _val(ws6, 4, 6, 6, r.get("hora_inicio",""))
+        _lbl(ws6, 4, 7, "Hora  Fin", bg=None); _val(ws6, 4, 8, 8, r.get("hora_fin",""))
+        f6=5
+        for label,valor in [("Nombre de Ruta",r.get("nombre_ruta","")),("Nodo Inicio",r.get("nodo_inicial","")),("Nodo Final",r.get("nodo_final","")),("Distancia de la Ruta",ciu.get("distancia_ruta","")),("Lider de Cuadrilla",r.get("lider","")),("Veh\u00edculo Placa",ciu.get("vehiculo_placa","")),("Coordinador Fibra \u00d3ptica",r.get("coordinador",""))]:
+            _lbl(ws6, f6, 2, label, bg=None); _val(ws6, f6, 3, 8, valor); f6+=1
         f6+=1
-    ws6.row_dimensions[f6].height=60
-    _lbl(ws6, f6, 2, "Observaciones:", bg=None); _val(ws6, f6, 3, 8, r.get("observaciones",""))
+        ws6.row_dimensions[f6].height=30
+        _hdr(ws6, f6, 2, 2, "NOVEDAD", fg=AZUL2)
+        _hdr(ws6, f6, 3, 3, "CHECK", fg=AZUL2)
+        _hdr(ws6, f6, 4, 7, "SOLUCI\u00d3N", fg=AZUL2)
+        _hdr(ws6, f6, 8, 8, "CANTIDAD", fg=AZUL2); f6+=1
+        for novedad in NOVEDADES_MPRIU:
+            ws6.row_dimensions[f6].height=43
+            info=nch.get(novedad,{}); tiene=info.get("check",False); cant=info.get("cantidad",0); chk="SI" if tiene else "NO"
+            sol=SOLUCIONES.get(novedad,"DOCUMENTAR Y REPORTAR AL COORDINADOR.")
+            _val(ws6, f6, 2, 2, novedad)
+            _hdr(ws6, f6, 3, 3, chk, fg=(VERDE if tiene else ROJO))
+            _val(ws6, f6, 4, 7, sol)
+            ws6.cell(f6,8,cant if tiene else 0).alignment = ws6.cell(f6,2).alignment.copy(horizontal="center")
+            ws6.cell(f6,8).border = _BORDE
+            f6+=1
+        ws6.row_dimensions[f6].height=60
+        _lbl(ws6, f6, 2, "Observaciones:", bg=None); _val(ws6, f6, 3, 8, r.get("observaciones",""))
 
     buf=io.BytesIO(); wb.save(buf); buf.seek(0); return buf.read()
 
