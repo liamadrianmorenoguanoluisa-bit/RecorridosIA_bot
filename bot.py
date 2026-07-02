@@ -100,6 +100,7 @@ LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAAqcAAACoCAYAAAGqK3duAAAAAXNSR0IArs4c6QAAAARn
 
 AZUL="0000FF"; GRIS="969696"; GRIS2="D9D9D9"; GRIS3="C0C0C0"
 AZUL2="0070C0"; VERDE="00B050"; ROJO="FF0000"; BLANCO="FFFFFF"
+CREMA="FFF2CC"; AZUL_LINK="0563C1"; GRIS_TXT="333333"
 
 # ── TOTP ──────────────────────────────────────────────────────────────────────
 def verificar_totp(codigo):
@@ -144,8 +145,8 @@ def _logo_image():
     try:
         data = base64.b64decode(LOGO_B64)
         img = XLImage(io.BytesIO(data))
-        img.width = 125
-        img.height = 44
+        img.width = 155
+        img.height = 54
         return img
     except Exception as e:
         logger.warning("No se pudo cargar el logo: " + str(e))
@@ -224,7 +225,7 @@ SOLUCIONES = {
 
 # ── Bordes ─────────────────────────────────────────────────────────────────────
 _THIN = Side(style="thin", color="FF000000")
-_MED  = Side(style="medium", color="FF000000")
+_MED  = Side(style="thick", color="FF000000")
 _BORDE = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 _BORDE_GRUESO = Border(left=_MED, right=_MED, top=_MED, bottom=_MED)
 
@@ -309,7 +310,6 @@ def generar_excel(datos):
     for i,(label,valor) in enumerate([("NOMBRE DE LA RUTA",r.get("nombre_ruta","")),("CÓDIGO DE CUADRILLA",r.get("codigo_cuadrilla","")),("NODO INICIAL",r.get("nodo_inicial",""))]):
         f=7+i; ws1.row_dimensions[f].height=38
         _lbl(ws1, f, 1, label); _val(ws1, f, 2, 4, valor, bold=True)
-        _marco_grueso(ws1, f, 1, f, 4)
 
     # Hasta 20 novedades — cada bloque ocupa 6 filas desde fila 10
     fila = 10
@@ -329,7 +329,8 @@ def generar_excel(datos):
         for label,key in [("MOTIVO APARENTE DE LA NOVEDAD","motivo"),("REMEDIO DEFINITIVO A LA NOVEDAD","remedio"),("TAREA PENDIENTE (por regulatorio/obra civil, contratista)","tarea_pendiente"),("COORDENADAS SITIO DE LA NOVEDAD (Grados decimales)","coordenadas")]:
             ws1.row_dimensions[fila].height=42
             _lbl(ws1, fila, 1, label, bg=GRIS3); _val(ws1, fila, 2, 4, nov.get(key,"")); fila+=1
-        _marco_grueso(ws1, fila_inicio_bloque, 1, fila-1, 4)
+        _marco_grueso(ws1, fila_inicio_bloque, 1, fila_inicio_bloque+1, 4)
+        _marco_grueso(ws1, fila_inicio_bloque+2, 1, fila-1, 4)
 
     # Si hay menos de 20, dejar bloques vacios numerados igual que el original
     for n_extra in range(len(novedades)+1, 21):
@@ -346,30 +347,52 @@ def generar_excel(datos):
         for label in ["MOTIVO APARENTE DE LA NOVEDAD","REMEDIO DEFINITIVO A LA NOVEDAD","TAREA PENDIENTE (por regulatorio/obra civil, contratista)","COORDENADAS SITIO DE LA NOVEDAD (Grados decimales)"]:
             ws1.row_dimensions[fila].height=42
             _lbl(ws1, fila, 1, label, bg=GRIS3); _val(ws1, fila, 2, 4, ""); fila+=1
-        _marco_grueso(ws1, fila_inicio_bloque, 1, fila-1, 4)
+        _marco_grueso(ws1, fila_inicio_bloque, 1, fila_inicio_bloque+1, 4)
+        _marco_grueso(ws1, fila_inicio_bloque+2, 1, fila-1, 4)
 
-    for label,valor in [("NODO FINAL",r.get("nodo_final","")),("LIDER DE CUADRILLA QUE ELABORA INFORME",r.get("lider","")),("AYUDANTE TÉCNICO",r.get("ayudante","")),("COORDINADOR FIBRA ÓPTICA",r.get("coordinador","")),("FOTOS ANEXAS AL REPORTE (INDIQUE CUANTAS)",str(r.get("fotos_total",0))),("OBSERVACIONES GENERALES",r.get("observaciones",""))]:
+    for label,valor in [("NODO FINAL",r.get("nodo_final","")),("LIDER DE CUADRILLA QUE ELABORA INFORME",r.get("lider","")),("AYUDANTE TÉCNICO",r.get("ayudante","")),("COORDINADOR FIBRA ÓPTICA",r.get("coordinador",""))]:
         ws1.row_dimensions[fila].height=38
         _lbl(ws1, fila, 1, label); _val(ws1, fila, 2, 4, valor)
-        _marco_grueso(ws1, fila, 1, fila, 4)
         fila+=1
+
+    fila_ini_fotos = fila
+    fila_fotos_val = fila
+    _lbl(ws1, fila, 1, "FOTOS ANEXAS AL REPORTE (INDIQUE CUANTAS)", bg=CREMA)
+    ws1.cell(fila,1).font = Font(bold=True, underline="single", name="Calibri", size=11, color=AZUL_LINK)
+    _fotos_txt = str(r.get("fotos_total",0)) if r.get("fotos_total",0) else ""
+    _val(ws1, fila, 2, 4, _fotos_txt)
+    ws1.cell(fila,2).fill = PatternFill("solid", fgColor=CREMA)
+    ws1.cell(fila,2).font = Font(bold=False, name="Calibri", size=11, color=GRIS_TXT)
+    ws1.row_dimensions[fila].height=38
+    fila+=1
+    _lbl(ws1, fila, 1, "OBSERVACIONES GENERALES", bg=CREMA)
+    ws1.cell(fila,1).font = Font(bold=True, name="Calibri", size=11, color=GRIS_TXT)
+    _val(ws1, fila, 2, 4, r.get("observaciones",""))
+    ws1.cell(fila,2).fill = PatternFill("solid", fgColor=CREMA)
+    ws1.cell(fila,2).font = Font(bold=False, name="Calibri", size=11, color=GRIS_TXT)
+    ws1.row_dimensions[fila].height=38
+    fila+=1
+    _marco_grueso(ws1, fila_ini_fotos, 1, fila-1, 4)
 
     # ══ HOJA 2: FOTOS_ANEXAS_AL_REPORTE — hasta 20 novedades ══════════
     ws2=wb.create_sheet("FOTOS_ANEXAS_AL_REPORTE")
-    ws2.column_dimensions["A"].width=20
-    ws2.column_dimensions["B"].width=20; ws2.column_dimensions["C"].width=40; ws2.column_dimensions["D"].width=20; ws2.column_dimensions["E"].width=20
+    ws2.column_dimensions["A"].width=2.71
+    ws2.column_dimensions["B"].width=19.71; ws2.column_dimensions["C"].width=58.71; ws2.column_dimensions["D"].width=23.71; ws2.column_dimensions["E"].width=35.71
+    ws2.column_dimensions["F"].width=10.14
     ws2.row_dimensions[1].height=4
     ws2.row_dimensions[2].height=60
     ws2.row_dimensions[3].height=4
-    ws2.cell(2,1).border = _BORDE_GRUESO
+    ws2.cell(2,2).border = _BORDE_GRUESO
     _insertar_logo_centrado(ws2, 2, "A")
     _hdr(ws2, 2, 3, 4, "REPORTE DE RECORRIDOS DE MANTENIMIENTO PREVENTIVO PARA RUTAS INTERURBANAS", fg="FFFFFF", color="000000", borde=_BORDE_GRUESO)
     _val(ws2, 2, 5, 5, "Código: FOR FO 02\nVersión: 3 (28/05/2021)", bold=True, borde=_BORDE_GRUESO)
-    ws2.cell(2,1).border = _BORDE_GRUESO
     ws2.row_dimensions[4].height = 18
     _hdr(ws2, 4, 2, 5, "FOTOS DE LAS ACCIONES CORRECTIVAS", borde=_BORDE_GRUESO)
     ws2.row_dimensions[5].height = 4
     ws2.row_dimensions[6].height = 4
+    for fr in (5, 6):
+        ws2.cell(fr,2).border = Border(left=_THIN)
+        ws2.cell(fr,5).border = Border(right=_THIN)
 
     # Bloque NODO INICIO — etiqueta B fusionada en altura con foto (filas 7-8)
     from openpyxl.styles import Alignment as _Al
@@ -554,7 +577,7 @@ def generar_excel(datos):
 
 def datos_vacios():
     return {
-        "recorrido":{"fecha":datetime.now().strftime("%d/%m/%Y"),"hora_inicio":"","hora_fin":"","nombre_ruta":"","codigo_cuadrilla":"","nodo_inicial":"","nodo_final":"","lider":"","ayudante":"","coordinador":"","fotos_total":0,"observaciones":"","novedades":[]},
+        "recorrido":{"fecha":"","hora_inicio":"","hora_fin":"","nombre_ruta":"","codigo_cuadrilla":"","nodo_inicial":"","nodo_final":"","lider":"","ayudante":"","coordinador":"","fotos_total":0,"observaciones":"","novedades":[]},
         "ciu":{"vehiculo_placa":"","distancia_ruta":"","herramientas":{},"equipos":{},"materiales":{}},
         "mpriu":{"novedades_check":{},"observaciones":""},
         "mangas":[],"hilos":{"posicion_odf":"","filas":[]},
@@ -625,16 +648,19 @@ async def tab_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     man_ok=bool(datos.get("mangas"))
     hil_ok=bool(datos["hilos"].get("filas"))
     def v(ok): return "✅" if ok else "⬜"
-    teclado=InlineKeyboardMarkup([
-        [InlineKeyboardButton(v(ciu_ok)+" Checklist CIU",callback_data="tab_1")],
-        [InlineKeyboardButton(v(mpriu_ok)+" Checklists MPRIU",callback_data="tab_2")],
-        [InlineKeyboardButton(v(rep_ok)+" REPORTES_DE_RECORRIDOS",callback_data="tab_reportes")],
-        [InlineKeyboardButton(("✅" if novedades>0 else "⬜")+" FOTOS_ANEXAS_AL_REPORTE ["+str(novedades)+" nov]",callback_data="tab_fotos")],
-        [InlineKeyboardButton(v(man_ok)+" Mangas",callback_data="tab_5"),InlineKeyboardButton(v(hil_ok)+" Hilos ODF",callback_data="tab_6")],
-        [InlineKeyboardButton("GENERAR EXCEL",callback_data="tab_generar")],
-    ])
-    completadas=sum([ciu_ok,mpriu_ok,rep_ok,novedades>0])
-    msg="INFORME FOR FO 02 — Completado: "+str(completadas)+"/4"+chr(10)+"Selecciona la pestana:"
+    botones=[]
+    if GENERAR_HOJAS_EXTRA:
+        botones.append([InlineKeyboardButton(v(ciu_ok)+" Checklist CIU",callback_data="tab_1")])
+        botones.append([InlineKeyboardButton(v(mpriu_ok)+" Checklists MPRIU",callback_data="tab_2")])
+    botones.append([InlineKeyboardButton(v(rep_ok)+" REPORTES_DE_RECORRIDOS",callback_data="tab_reportes")])
+    botones.append([InlineKeyboardButton(("✅" if novedades>0 else "⬜")+" FOTOS_ANEXAS_AL_REPORTE ["+str(novedades)+" nov]",callback_data="tab_fotos")])
+    if GENERAR_HOJAS_EXTRA:
+        botones.append([InlineKeyboardButton(v(man_ok)+" Mangas",callback_data="tab_5"),InlineKeyboardButton(v(hil_ok)+" Hilos ODF",callback_data="tab_6")])
+    botones.append([InlineKeyboardButton("GENERAR EXCEL",callback_data="tab_generar")])
+    teclado=InlineKeyboardMarkup(botones)
+    total_pestanas = 4 if GENERAR_HOJAS_EXTRA else 2
+    completadas=sum([ciu_ok,mpriu_ok,rep_ok,novedades>0]) if GENERAR_HOJAS_EXTRA else sum([rep_ok,novedades>0])
+    msg="INFORME FOR FO 02 — Completado: "+str(completadas)+"/"+str(total_pestanas)+chr(10)+"Selecciona la pestana:"
     if update.callback_query:
         await update.callback_query.answer()
         try: await update.callback_query.edit_message_text(msg,reply_markup=teclado)
